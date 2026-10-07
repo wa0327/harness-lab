@@ -6,11 +6,8 @@ node_modules/
 .cache/
 .home/
 
-# 跑分的原始錯誤輸出
-results/*.log
-
-# harness 測試的工作目錄
-runs/
+# 自動產生的紀錄：跑分輸出、harness 測試工作目錄與紀錄、伺服器 log
+logs/
 
 # Python 快取
 __pycache__/

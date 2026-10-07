@@ -36,7 +36,7 @@ pi --model harness-lab/qwen3.6-35b-a3b --thinking off   # 小改動用 off／low
 codex
 ```
 
-想走 Pi 官方的 router 模式時，改跑 `scripts/serve-router.sh`。第一次要在 Pi 互動模式裡執行 `/login llama.cpp` 和 `/llama`，模型清單才會存下來，之後才能用 `pi --model llama.cpp/Qwen3.6-35B-A3B-UD-Q4_K_XL`。resolute 上已經做過這一步。
+想走 Pi 官方的 router 模式時，改跑 `scripts/serve-router.sh`。router 會依請求的模型名稱（檔名，如 `Qwen3.6-35B-A3B-UD-Q4_K_XL`）自動載入，所以 Codex 等一般用戶端不必先手動載入。Pi 這邊，第一次要在互動模式裡執行 `/login llama.cpp` 和 `/llama`，模型清單才會存下來，之後才能用 `pi --model llama.cpp/Qwen3.6-35B-A3B-UD-Q4_K_XL`。resolute 上已經做過這一步。
 
 ## 腳本
 
@@ -44,10 +44,11 @@ codex
 |---|---|
 | `env.sh` | 所有路徑與參數；每個值都可用環境變數覆寫，如 `N_CPU_MOE=32 scripts/serve-main.sh` |
 | `scripts/serve-main.sh` | 單一模型模式，給 Pi（models.json）、Codex、Cline、Claude Code 等用。提供 OpenAI `/v1/chat/completions`、`/v1/responses` 與 Anthropic `/v1/messages` |
-| `scripts/serve-router.sh` | Pi 官方建議的 router 模式（Pi 裡 `/login llama.cpp`、`/llama`、`/model`）。已驗證 MoE 等參數會傳給 router 載入的模型；模型名稱是檔名 |
+| `scripts/serve-router.sh` | Pi 官方建議的 router 模式（Pi 裡 `/login llama.cpp`、`/llama`、`/model`）。收到請求時自動載入模型，同時最多一個（`--models-max 1`），請求別的模型會把目前的卸載。已驗證 MoE 等參數會傳給 router 載入的模型；模型名稱是檔名 |
 | `scripts/serve-fim.sh` | Tab 補全伺服器，port 8012，給 llama.vscode / Continue。context 8K、batch 512 時可以和主模型同時跑（合計 VRAM 7.7GB） |
-| `scripts/bench-moe.sh` | `llama-bench` 掃描 `--n-cpu-moe`，結果寫到 `results/` |
-| `scripts/agent-test.sh` | 用 `tasks/` 裡的同一題測不同 harness（`pi`、`pi-router`、`codex`），自動驗證並記錄到 `results/agent-runs.md`。`PI_THINKING=off` 可以調 Pi 的思考強度 |
+| `scripts/bench-moe.sh` | `llama-bench` 掃描 `--n-cpu-moe`，結果寫到 `logs/bench/` |
+| `scripts/agent-test.sh` | 用 `evals/` 裡的同一題測不同 harness（`pi`、`pi-router`、`codex`），自動驗證並記錄到 `logs/agent-runs.md`，每次的工作目錄與事件紀錄在 `logs/runs/`。`PI_THINKING=off` 可以調 Pi 的思考強度 |
+| `scripts/compare-runs.py` | 比較多次執行的 token、回合數、工具呼叫、程式差異與最終回覆。`--latest fix-inventory` 取每種 harness 最新一次；`--md` 輸出 Markdown |
 | `scripts/setup-tools.sh`、`install-llama.sh`、`get-models.sh` | 安裝工具、llama.cpp 與模型，全部放在專案內 |
 
 ## 其他 harness 的接法
@@ -67,4 +68,13 @@ codex
 - **速度**：預填約 1,160 tok/s、生成約 43 tok/s（`--n-cpu-moe 38`、`-ub 4096`）。
 - **解題**：Pi 和 Codex 兩道題全部通過。關掉思考的 Pi 解較難的題目只要 66 秒；開 medium 思考要 3 到 6 分鐘。
 
-詳見 [results/README.md](results/README.md)。
+詳見 [reports/resolute 實測結果.md](<reports/resolute 實測結果.md>)。
+
+## 目錄
+
+| 目錄 | 內容 | 版控 |
+|---|---|---|
+| `scripts/`、`configs/`、`evals/` | 腳本、設定範本、評測題目（每個子目錄一題） | ✅ |
+| `reports/`、`research_notes/` | 調研報告、實測總結等人工整理的文件 | ✅ |
+| `logs/` | 自動產生的紀錄：跑分輸出、`agent-runs.md`、`runs/`（每次測試的工作目錄）、伺服器 log | ❌ |
+| `vendor/`、`models/`、`node_modules/`、`.venv/`、`.cache/`、`.home/` | 工具、模型、快取、各 harness 的設定與憑證 | ❌ |

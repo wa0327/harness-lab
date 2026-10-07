@@ -4,6 +4,7 @@
 
 LAB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 export LAB_DIR
+export LOG_DIR="${LOG_DIR:-$LAB_DIR/logs}"   # 自動產生的紀錄，不進版控
 
 # llama.cpp 預編譯版本（固定 build，避免追新版踩到工具呼叫解析的回歸）
 export LLAMA_BUILD="${LLAMA_BUILD:-b11469}"
@@ -25,7 +26,7 @@ export FIM_PORT="${FIM_PORT:-8012}"   # llama.vscode 預設連 8012
 export FIM_CTX="${FIM_CTX:-8192}"     # 補全不需長 context；0（原生 32K）會和主模型搶 VRAM 而 OOM
 export FIM_BATCH="${FIM_BATCH:-512}"
 
-# 效能參數（resolute 用 scripts/bench-moe.sh 實測後選定，結果見 results/）
+# 效能參數（resolute 用 scripts/bench-moe.sh 實測後選定，總結見 reports/resolute 實測結果.md）
 export N_CPU_MOE="${N_CPU_MOE:-38}"   # resolute 實測：-ub 4096 時 38 是下限（37 OOM），40→38 只快約 2%
 export CTX="${CTX:-65536}"
 export BATCH="${BATCH:-4096}"

@@ -10,8 +10,8 @@ read -r -a values <<< "${values[*]}"
 PP="${PP:-8192}"   # 模擬 agent 每回合送出的長前綴
 TG="${TG:-128}"
 
-mkdir -p "$LAB_DIR/results"
-out="$LAB_DIR/results/bench-$(hostname)-$(date +%Y%m%d-%H%M).md"
+mkdir -p "$LOG_DIR/bench"
+out="$LOG_DIR/bench/bench-$(hostname)-$(date +%Y%m%d-%H%M).md"
 {
   echo "# n-cpu-moe 掃描 $(hostname) $(date '+%F %T')"
   echo
