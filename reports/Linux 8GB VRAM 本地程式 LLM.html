@@ -1,0 +1,380 @@
+<!doctype html>
+<html lang="zh-Hant-TW">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>讓 8GB 顯卡跑動 35B 程式代理</title>
+<style>
+:root{--bg:#fbfaf7;--fg:#1f2328;--muted:#5d6670;--accent:#1d5fa8;--border:#d9d6cf;
+--code-bg:#f1efe9;--th-bg:#efece4;--row-alt:#f6f4ef;--strong:#111}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--bg:#16181c;--fg:#e3e5e8;--muted:#9aa3ad;
+--accent:#7fb3f0;--border:#343a42;--code-bg:#1f2329;--th-bg:#22272e;--row-alt:#1b1f24;--strong:#fff}}
+:root[data-theme="dark"]{--bg:#16181c;--fg:#e3e5e8;--muted:#9aa3ad;--accent:#7fb3f0;--border:#343a42;
+--code-bg:#1f2329;--th-bg:#22272e;--row-alt:#1b1f24;--strong:#fff}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--fg);
+font-family:"Noto Sans TC","PingFang TC","Microsoft JhengHei",system-ui,-apple-system,"Segoe UI",sans-serif;
+font-size:16.5px;line-height:1.8}
+main{max-width:860px;margin:0 auto;padding:32px 16px 80px}
+h1{font-size:1.9rem;line-height:1.3;margin:0 0 1.2rem;letter-spacing:.01em}
+h2{font-size:1.35rem;line-height:1.4;margin:2.6rem 0 .9rem;padding-top:.6rem;border-top:1px solid var(--border)}
+h3{font-size:1.08rem;margin:1.8rem 0 .6rem;color:var(--fg)}
+p{margin:0 0 1.05rem}
+strong{color:var(--strong)}
+a{color:var(--accent);text-decoration:underline;text-decoration-thickness:1px;text-underline-offset:2px;word-break:break-word}
+a:hover{text-decoration-thickness:2px}
+code{font-family:"JetBrains Mono","Fira Code",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+font-size:.88em;background:var(--code-bg);padding:.1em .35em;border-radius:4px}
+pre{background:var(--code-bg);border:1px solid var(--border);border-radius:8px;padding:14px 16px;
+overflow-x:auto;line-height:1.55;margin:0 0 1.3rem}
+pre code{background:none;padding:0;font-size:.84rem;white-space:pre}
+.table-wrap{overflow-x:auto;margin:0 0 1.4rem;border:1px solid var(--border);border-radius:8px}
+table{border-collapse:collapse;width:100%;font-size:.9rem;line-height:1.55}
+th,td{padding:8px 11px;text-align:left;vertical-align:top;border-bottom:1px solid var(--border)}
+th{background:var(--th-bg);font-weight:600;white-space:nowrap}
+tbody tr:nth-child(even){background:var(--row-alt)}
+tbody tr:last-child td{border-bottom:none}
+.meta{color:var(--muted);font-size:.88rem;margin:-.6rem 0 1.6rem}
+@media (max-width:600px){body{font-size:15.5px}h1{font-size:1.5rem}h2{font-size:1.2rem}th{white-space:normal}}
+</style>
+</head>
+<body>
+<main>
+<h1 id="讓-8gb-顯卡跑動-35b-程式代理">讓 8GB 顯卡跑動 35B 程式代理</h1>
+<p class="meta">研究報告 · 2026-10-07 · 硬體：resolute（RTX 4060 Laptop 8GB + HX 370 + 30GB）／noble（RTX 5060 Ti 8GB + 9950X + 30GB）</p>
+<p>截至 2026 年 10 月，在 8GB VRAM + 約 30GB RAM 的 Linux 機器上，寫程式最划算的組合是<strong>主線 llama.cpp 的 <code>llama-server</code>，搭配 Qwen3.6-35B-A3B（Unsloth UD-Q4_K_XL，22.4GB）</strong>。做法是把所有層放上 GPU，再用 <code>--n-cpu-moe</code> 把大部分 MoE 專家權重留在系統 RAM。補全另開一個 Qwen2.5-Coder-1.5B base 的 FIM 小模型。前端分工如下：VS Code 裡用 Cline（開 Compact Prompt）或 Copilot Chat BYOK 當 agent，用 llama.vscode 或 Continue 做 Tab 補全，終端機用 OpenCode 或 Claude Code。</p>
+<p>選 Qwen3.6-35B-A3B 的理由很直接。它在約 3B active 參數這一級裡的 SWE-bench Verified（73.4）和 Terminal-Bench 2.0（51.5）都是最高分，而且 40 層裡只有 10 層有 KV cache，長 context 幾乎不占 VRAM。最接近你硬體的公開實測，是一台 8GB 筆電 GPU 跑出生成 35–38 tok/s、預填 875–935 tok/s。</p>
+<p>真正限制體驗的是預填速度（prefill），不是生成速度。agent harness 每回合都會送出數千到數萬 token 的前綴，所以 <code>-ub 2048</code> 以上的大 micro-batch、prompt cache，以及系統提示短的 harness，比多擠一兩層專家到 GPU 更重要。</p>
+<p>要先講清楚：<strong>目前沒有任何公開數據是在 resolute（RTX 4060 Laptop + HX 370）或 noble（RTX 5060 Ti 8GB + 9950X）上量的</strong>。下文的數字凡標「他人實測」，都來自相近硬體；凡標「推估」，都是外推，需要在你的機器上用 <code>llama-bench</code> 驗證。</p>
+<h2 id="llama-server-加專家卸載是-8gb-唯一的甜蜜點">llama-server 加專家卸載是 8GB 唯一的甜蜜點</h2>
+<p>8GB 卡要跑比 VRAM 大的模型，關鍵是「逐張量（per-tensor）切分」：attention、shared expert 和 KV 放 GPU，routed experts 放 CPU。目前只有 GGUF／llama.cpp 家族把這件事做得成熟，包括主線 llama.cpp、ik_llama.cpp，以及包裝它們的 LM Studio（llmster）和 Ollama。主線 <code>llama-server</code> 提供 <code>--cpu-moe</code>（全部專家放 CPU）、<code>--n-cpu-moe N</code>（前 N 層的專家放 CPU）和 <code>-ot</code> 正則覆寫三種控制 (<a href="https://github.com/ggml-org/llama.cpp/blob/master/tools/server/README.md" target="_blank" rel="noopener noreferrer">llama-server README</a>)。它還同時提供 OpenAI <code>/v1/chat/completions</code>、<code>/v1/responses</code>，以及 <strong>Anthropic <code>/v1/messages</code>（含 <code>count_tokens</code>、tool_use、thinking）</strong>，Claude Code 可以直接接上 (<a href="https://huggingface.co/blog/ggml-org/anthropic-messages-api-in-llamacpp" target="_blank" rel="noopener noreferrer">HF blog</a>)。主線在 2026-05-16 合併了 Multi-Token Prediction（<code>--spec-type draft-mtp</code>）(<a href="https://github.com/ggml-org/llama.cpp/pull/22673" target="_blank" rel="noopener noreferrer">PR #22673</a>)。Linux 版有 CUDA 12.8 與 13.4 的預編譯檔，build 編號是滾動式的，本文撰寫時是 <code>b11465</code> (<a href="https://github.com/ggml-org/llama.cpp/releases" target="_blank" rel="noopener noreferrer">llama.cpp releases</a>)。</p>
+<p>卸載的效益有實測可證。同一張 RTX 3060 Ti 8GB 跑 Qwen3-Coder-30B-A3B：用 <code>--cpu-moe</code> 只有 <strong>13.38 tok/s</strong>；把 <code>--n-cpu-moe</code> 調到 40、讓 VRAM 用到 7,265MB 後，升到 <strong>32.49 tok/s</strong>，約 2.4 倍 (<a href="https://dev.to/upayanghosh/from-oom-to-262k-context-running-qwen3-coder-30b-locally-on-8gb-vram-1ej1" target="_blank" rel="noopener noreferrer">dev.to</a>)。調法是先把 N 設高，再逐步調低，直到速度突然崩落（代表 VRAM 溢出到共享記憶體），然後退回一格。RTX 5090 上的掃描就看得到這種懸崖：n=12 時 69.4 tok/s，再往下就跌到 27.5 (<a href="https://openclawdc.com/blog/llama-cpp-moe-offload-flags-explained/" target="_blank" rel="noopener noreferrer">openclawdc</a>)。</p>
+<p>其他引擎各有不適合的地方：</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>引擎</th>
+<th>結論</th>
+<th>原因</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>ik_llama.cpp</td>
+<td>值得做效能 A/B</td>
+<td>有 fused MoE、IQK 量化、MTP，社群把它當 MoE 混合推論的首選 (<a href="https://huggingface.co/blog/Doctor-Shotgun/llamacpp-moe-offload-guide" target="_blank" rel="noopener noreferrer">Doctor-Shotgun</a>)。但它在 CPU/GPU 混合 MoE 下不能用 <code>-rtr</code>，含 f16 張量的 Unsloth <code>_XL</code> 檔可能載入失敗 (<a href="https://github.com/ikawrakow/ik_llama.cpp" target="_blank" rel="noopener noreferrer">ik_llama.cpp README</a>)，也沒確認有 <code>/v1/messages</code></td>
+</tr>
+<tr>
+<td>LM Studio / llmster</td>
+<td>最省事的備案</td>
+<td>有「Force Model Expert Weights onto CPU」選項 (<a href="https://www.lmstudio.ai/blog/lmstudio-v0.3.23" target="_blank" rel="noopener noreferrer">LM Studio 0.3.23</a>)、Anthropic 端點（0.4.1 起）和 MTP。2025 年時該選項還是全有或全無的開關，現在有沒有逐層滑桿未確認 (<a href="https://github.com/lmstudio-ai/lmstudio-bug-tracker/issues/900" target="_blank" rel="noopener noreferrer">bug tracker #900</a>)</td>
+</tr>
+<tr>
+<td>Ollama</td>
+<td>不建議用在比 VRAM 大的 MoE</td>
+<td><code>num_moe_offload</code> PR 沒被合併，維護者傾向自動配置 (<a href="https://github.com/ollama/ollama/issues/11005" target="_blank" rel="noopener noreferrer">Ollama #11005</a>)。Anthropic 端點沒有 <code>count_tokens</code>、不支援 <code>tool_choice</code> (<a href="https://docs.ollama.com/api/anthropic-compatibility" target="_blank" rel="noopener noreferrer">Ollama docs</a>)。預設 4,096 context 會悄悄截掉工具 schema (<a href="https://localaimaster.com/blog/crush-ollama-setup" target="_blank" rel="noopener noreferrer">localaimaster</a>)</td>
+</tr>
+<tr>
+<td>vLLM / SGLang / ExLlamaV3</td>
+<td>只適合整個模型放得進 8GB 的情況</td>
+<td>主打 GPU 常駐與批次吞吐。vLLM 在 sm_120 上需要從原始碼編譯 (<a href="https://github.com/vllm-project/vllm/issues/35432" target="_blank" rel="noopener noreferrer">vLLM #35432</a>)</td>
+</tr>
+<tr>
+<td>KTransformers</td>
+<td>不適用</td>
+<td>參考配置是 24GB GPU 加 AMX/AVX512 伺服器 CPU (<a href="https://github.com/kvcache-ai/ktransformers" target="_blank" rel="noopener noreferrer">KTransformers</a>)</td>
+</tr>
+</tbody>
+</table></div>
+<p>noble 的 RTX 5060 Ti 是 Blackwell（sm_120），需要 <strong>CUDA Toolkit ≥ 12.8、驅動 ≥ 570</strong>，自行編譯時要加 <code>-DCMAKE_CUDA_ARCHITECTURES=120</code>。如果出現「no kernel image is available」，代表要重新編譯 (<a href="https://bestllmfor.com/guides/llama-cpp-cuda-blackwell-sm120-build/" target="_blank" rel="noopener noreferrer">bestllmfor sm120</a>)。</p>
+<p>resolute 的風險在筆電功耗。有人回報 Linux 下 RTX 4060 Laptop 的功耗上限被鎖在 60W，規格是 140W，要靠 <code>nvidia-powerd</code>（Dynamic Boost）解鎖 (<a href="https://forums.developer.nvidia.com/t/the-default-power-limit-of-my-4060-laptop-halves-its-performance/294699" target="_blank" rel="noopener noreferrer">NVIDIA 論壇</a>；<a href="https://download.nvidia.com/XFree86/Linux-x86_64/580.126.18/README/dynamicboost.html" target="_blank" rel="noopener noreferrer">NVIDIA README</a>)。Dynamic Boost 在 AMD CPU 筆電上能不能用，目前沒有來源確認。</p>
+<p>Blackwell 的 NVFP4 加速在這裡派不上用場。Unsloth 測到 35B-A3B 快 1.56–1.79 倍，但前提是整個模型放在 GPU 上 (<a href="https://unsloth.ai/docs/models/qwen3.6" target="_blank" rel="noopener noreferrer">Unsloth Qwen3.6</a>)，8GB 放不下。</p>
+<h2 id="qwen36-35b-a3b-以-q4-量化稱霸-30gb-ram-預算">Qwen3.6-35B-A3B 以 Q4 量化稱霸 30GB RAM 預算</h2>
+<p>扣掉作業系統、VS Code 和瀏覽器，8GB VRAM + 30GB RAM 能放的 GGUF 大約在 28GB 以內，而且只有 MoE 能跑得快。dense 模型一旦溢出到 CPU，每個 token 都要讀過全部權重，速度直接掉到個位數。Qwen3.8-27B 是目前分數最好的小型開放模型，但在 RTX 4060 8GB 上實測只有 <strong>5–6 tok/s</strong>，同一台機器跑 Qwen3.6-35B-A3B 則有 15–18 tok/s (<a href="https://reddit.sentinel-team.org/posts/1w6y128/snapshots/2026-09-04T21%3A20%3A12.3645Z" target="_blank" rel="noopener noreferrer">r/LocalLLaMA 快照</a>)。所以這個預算下該看的是「35B 總參數、約 3B active」這一級的 MoE。</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>模型</th>
+<th>SWE-bench Verified</th>
+<th>Terminal-Bench</th>
+<th>LiveCodeBench v6</th>
+<th>Q4 檔案大小</th>
+<th>定位</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Qwen3.6-35B-A3B</strong></td>
+<td>73.4（官方）／70.12（NVIDIA 評測）</td>
+<td>TB2.0 51.5</td>
+<td>80.4</td>
+<td>UD-Q4_K_XL 22.4GB</td>
+<td>首選 agent、對話</td>
+</tr>
+<tr>
+<td>GLM-4.7-Flash（30B-A3B）</td>
+<td>59.2</td>
+<td>—</td>
+<td>64.0</td>
+<td>約 18GB</td>
+<td>第二選擇，τ² 79.5，工具使用強</td>
+</tr>
+<tr>
+<td>gpt-oss-20b</td>
+<td>60.7（NVIDIA）／34.0（Z.ai 表）</td>
+<td>—</td>
+<td>61.0</td>
+<td>MXFP4 約 13–15GB</td>
+<td>最小最快的 MoE，llama.cpp 有官方 8GB 配方</td>
+</tr>
+<tr>
+<td>Gemma 4 26B-A4B</td>
+<td>無官方數字</td>
+<td>—</td>
+<td>77.1</td>
+<td>約 16–18GB</td>
+<td>對話、演算法題</td>
+</tr>
+<tr>
+<td>Nemotron 3.5 Lightning 30B-A3B</td>
+<td>51.56</td>
+<td>TB2.1 24.58</td>
+<td>—</td>
+<td>Q4</td>
+<td>偏速度與指令遵循</td>
+</tr>
+<tr>
+<td>Qwen3.5-9B（dense）</td>
+<td>—</td>
+<td>—</td>
+<td>65.6</td>
+<td>4-bit 約 6.5GB</td>
+<td>能整個放進 VRAM 的快速對話模型</td>
+</tr>
+</tbody>
+</table></div>
+<p>表中數據來源：<a href="https://huggingface.co/Qwen/Qwen3.6-35B-A3B" target="_blank" rel="noopener noreferrer">Qwen3.6 卡</a>、<a href="https://huggingface.co/nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-BF16" target="_blank" rel="noopener noreferrer">NVIDIA Nemotron 卡</a>、<a href="https://huggingface.co/zai-org/GLM-4.7-Flash" target="_blank" rel="noopener noreferrer">GLM-4.7-Flash 卡</a>、<a href="https://docs.api.nvidia.com/nim/reference/openai-gpt-oss-20b" target="_blank" rel="noopener noreferrer">NVIDIA NIM gpt-oss</a>、<a href="https://huggingface.co/google/gemma-4-26B-A4B-it" target="_blank" rel="noopener noreferrer">Gemma 4 卡</a>、<a href="https://huggingface.co/Qwen/Qwen3.5-9B" target="_blank" rel="noopener noreferrer">Qwen3.5-9B 卡</a>。</p>
+<p>各家自報分數會因評測 harness 不同差很多。gpt-oss-20b 有 60.7 和 34.0 兩種說法，就是同一個模型在兩張表上的差距。比較可信的是 NVIDIA 的第三方表：在那裡 Qwen3.6-35B-A3B 仍領先 Nemotron 約 19 分。</p>
+<p>Qwen3.6-35B-A3B 還有一個對 8GB 特別有利的架構特性。它的 40 層排成 10 組「3 層 Gated DeltaNet + 1 層 Gated Attention」，<strong>只有 10 層需要 KV cache</strong>。原生 context 是 262,144 (<a href="https://huggingface.co/Qwen/Qwen3.6-35B-A3B" target="_blank" rel="noopener noreferrer">HF 模型卡</a>)，長 context 的 VRAM 代價很小。Sebastian Raschka 用它測了幾個 harness：Codex 和 Claude Code 都是 5/5，Qwen Code 是 4/5 (<a href="https://magazine.sebastianraschka.com/p/using-local-coding-agents" target="_blank" rel="noopener noreferrer">Raschka</a>)。</p>
+<p><strong>量化選擇：預設用 Unsloth UD-Q4_K_XL（22.4GB）</strong>，RAM 吃緊時改用 UD-Q4_K_S（20.9GB）或 UD-IQ4_XS（17.7GB）。UD-Q3_K_XL（16.8GB）是最後的退路 (<a href="https://huggingface.co/unsloth/Qwen3.6-35B-A3B-GGUF/tree/main" target="_blank" rel="noopener noreferrer">Unsloth GGUF 清單</a>)。Unsloth 的 Dynamic 量化會把重要的層升到 8 或 16-bit。第三方測試裡，Qwen3.5-397B 的 UD-Q4_K_XL 只比原版低 0.8 分 (<a href="https://unsloth.ai/docs/models/qwen3.5" target="_blank" rel="noopener noreferrer">Unsloth Qwen3.5</a>)。</p>
+<p>最接近 resolute 的參考配置用的是 UD-Q6_K_XL（31.8GB），但那台有 64GB RAM，作者也明說 32GB 系統會有「明顯的頻寬限制」(<a href="https://github.com/numsu/Qwen3.6-A3B-8GB-llama.cpp" target="_blank" rel="noopener noreferrer">numsu repo</a>)，所以 30GB 的機器不要照抄 Q6。EXL3、AWQ、NVFP4 都是 GPU 常駐格式，不適用於專家卸載。</p>
+<p><strong>Tab 補全另用專門的模型。</strong> FIM（fill-in-the-middle）生態還停在 Qwen2.5-Coder 世代。llama.vscode 的預設檔依 VRAM 分級：8–16GB 用 3B、8GB 以下用 1.5B (<a href="https://github.com/ggml-org/llama.vscode" target="_blank" rel="noopener noreferrer">llama.vscode</a>)。Qwen3.6、Gemma 4、GLM 的模型卡都沒寫有 FIM 訓練，因此主模型不能兼任補全。Qwen2.5-Coder-1.5B base 下載約 986MB，即使在 CPU 上也能做到 500ms 以內的延遲 (<a href="https://localaimaster.com/blog/best-local-autocomplete-models" target="_blank" rel="noopener noreferrer">localaimaster</a>)。</p>
+<h2 id="預填而非生成速度決定-agent-體驗">預填而非生成速度決定 agent 體驗</h2>
+<p>下表是公開的他人實測，硬體都和你的機器相近，但沒有一台完全相同：</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>情境</th>
+<th>硬體</th>
+<th>預填 tok/s</th>
+<th>生成 tok/s</th>
+<th>來源</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Qwen3.6-35B-A3B UD-Q6_K_XL，262K ctx，q8_0 KV，專家在 CPU</td>
+<td>8GB 筆電 GPU + Core Ultra 7 265HX + <strong>64GB</strong></td>
+<td>875–935</td>
+<td><strong>35–38</strong></td>
+<td><a href="https://github.com/numsu/Qwen3.6-A3B-8GB-llama.cpp" target="_blank" rel="noopener noreferrer">numsu</a></td>
+</tr>
+<tr>
+<td>Qwen3.6-35B-A3B</td>
+<td>RTX 4060 8GB + 12 核 + 64GB <strong>DDR4</strong></td>
+<td>—</td>
+<td>15–18</td>
+<td><a href="https://reddit.sentinel-team.org/posts/1w6y128/snapshots/2026-09-04T21%3A20%3A12.3645Z" target="_blank" rel="noopener noreferrer">r/LocalLLaMA</a></td>
+</tr>
+<tr>
+<td>Qwen3-Coder-30B-A3B Q4_K_XL，<code>--n-cpu-moe 40</code>，32K</td>
+<td>RTX 3060 Ti 8GB + 32GB</td>
+<td>51.6（小 ubatch）</td>
+<td><strong>32.5</strong></td>
+<td><a href="https://dev.to/upayanghosh/from-oom-to-262k-context-running-qwen3-coder-30b-locally-on-8gb-vram-1ej1" target="_blank" rel="noopener noreferrer">dev.to</a></td>
+</tr>
+<tr>
+<td>Qwen3.5-35B-A3B Q4_K_M，專家全在 CPU，102K</td>
+<td>RTX 2060 <strong>6GB 筆電</strong> + 32GB</td>
+<td>350–400</td>
+<td>~15</td>
+<td><a href="https://github.com/ggml-org/llama.cpp/discussions/21112" target="_blank" rel="noopener noreferrer">Discussion #21112</a></td>
+</tr>
+<tr>
+<td>Qwen3.5-9B Q4_K_M，全部在 GPU，32K</td>
+<td>RTX 3070 8GB</td>
+<td>~1,932</td>
+<td>54.9</td>
+<td><a href="https://localllm.in/blog/best-local-llms-8gb-vram-2025" target="_blank" rel="noopener noreferrer">localllm.in</a></td>
+</tr>
+</tbody>
+</table></div>
+<p>另外有一則 HF 討論宣稱 RTX 4060 Laptop + 32GB 跑出 33–34 tok/s，但參數不公開、只提供改過的二進位檔，可信度低，所以不列入表中 (<a href="https://huggingface.co/Qwen/Qwen3.6-35B-A3B/discussions/58" target="_blank" rel="noopener noreferrer">HF #58</a>)。</p>
+<p><strong>生成速度主要看系統 RAM 頻寬。</strong> 專家權重在 RAM 裡，每個 token 都要讀一遍。Framework 社群對 Ryzen AI 300 的判斷也是輸出速度受頻寬限制 (<a href="https://community.frame.work/t/fw13-ai-370-performance/70063" target="_blank" rel="noopener noreferrer">Framework 社群</a>)。</p>
+<p><strong>【推估】</strong> resolute 的 HX 370 用的是 LPDDR5X，noble 的 9950X 用雙通道 DDR5，兩者屬於同一頻寬等級。筆電的劣勢比較可能出現在 PCIe 鏈路、GPU 功耗牆和長時間降頻，影響的主要是預填。換成 Q4 後每個 token 要讀的位元組比 Q6 少，因此推估 <strong>Qwen3.6-35B-A3B UD-Q4_K_XL 在 64K context 下，resolute 生成約 20–35 tok/s、noble 約 25–40 tok/s</strong>。這兩個數字都要實測確認。</p>
+<p><strong>預填才是 agent 的瓶頸。</strong> 一次處理的 token 夠多時，llama.cpp 會把放在 CPU 的專家權重經 PCIe 搬到 GPU，整批一起算，所以預填速度取決於 micro-batch 大小和 PCIe 頻寬 (<a href="https://huggingface.co/blog/Doctor-Shotgun/llamacpp-moe-offload-guide" target="_blank" rel="noopener noreferrer">Doctor-Shotgun</a>)。上表的 3060 Ti 用 64–256 的小 ubatch，只有 40–52 tok/s；6GB 筆電用正確設定就有 350–400 tok/s。</p>
+<p>換算成實際等待時間（純算術）：Claude Code 第一回合約送出 <strong>33k token</strong>，OpenCode 約 <strong>7k</strong> (<a href="https://systima.ai/blog/claude-code-vs-opencode-token-overhead" target="_blank" rel="noopener noreferrer">systima.ai</a>)。</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>預填速度</th>
+<th>Claude Code 首回合（33k）</th>
+<th>OpenCode 首回合（7k）</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>900 tok/s</td>
+<td>約 37 秒</td>
+<td>約 8 秒</td>
+</tr>
+<tr>
+<td>350 tok/s</td>
+<td>約 94 秒</td>
+<td>約 20 秒</td>
+</tr>
+<tr>
+<td>50 tok/s</td>
+<td>超過 11 分鐘</td>
+<td>超過 2 分鐘</td>
+</tr>
+</tbody>
+</table></div>
+<p>這就是 <code>-b 2048 -ub 2048</code>（甚至 4096）必開的原因。代價是 compute buffer 會占 VRAM，<code>--n-cpu-moe</code> 要多讓出一兩層。</p>
+<p><strong>context 的取捨。</strong> KV cache 只會和你選擇留在 GPU 的專家搶 VRAM。Qwen3.6 只有 10 層有 KV，所以 numsu 能在 8GB 上用 q8_0 KV 跑到 262K。但 context 越大，能放上 GPU 的專家越少，長 context 下的生成速度也會下降：舊世代實測約是 32K 時 30 tok/s、102K 時 15 tok/s (<a href="https://github.com/ggml-org/llama.cpp/discussions/21112" target="_blank" rel="noopener noreferrer">Discussion #21112</a>)。</p>
+<p>KV 量化是省記憶體用的，不是加速用的：放得下的話，f16 比 q8_0 快 (<a href="https://openclawdc.com/blog/llama-cpp-moe-offload-flags-explained/" target="_blank" rel="noopener noreferrer">openclawdc</a>)。社群偏好 q8_0，不建議 q4_0。</p>
+<p>實務上建議這樣配：Claude Code 至少開 <strong>64K</strong>，因為光基線就有 33k；OpenCode 和 Cline 開 32–64K。</p>
+<p><strong>MTP 的實際效果還不確定。</strong> Unsloth 回報 MTP 能加速 1.4–2.2 倍，<code>--spec-draft-n-max 2</code> 效果最好 (<a href="https://unsloth.ai/docs/models/qwen3.6" target="_blank" rel="noopener noreferrer">Unsloth Qwen3.6</a>)。但 8GB 加 CPU 專家的參考配置實測後放棄了 speculative decoding (<a href="https://github.com/numsu/Qwen3.6-A3B-8GB-llama.cpp" target="_blank" rel="noopener noreferrer">numsu</a>)，原因可能是驗證批次仍要經過 CPU 上的專家。所以 MTP 列為「可試、預設關」。</p>
+<h2 id="輕量-harness-比重型-harness-更適合-8gb">輕量 harness 比重型 harness 更適合 8GB</h2>
+<p>harness 是包在模型外面的代理程式。它負責系統提示、工具定義、檔案讀寫和指令執行的迴圈，決定模型「怎麼做事」；推論引擎則決定模型「跑多快」。在 8GB 上，harness 的固定提示長度直接等於每次新對話要付的預填時間，所以挑 harness 和挑模型一樣重要。</p>
+<p><strong>VS Code 內的 agent 有四個選擇。</strong></p>
+<p><strong>Cline</strong> 是本地路徑投入最多的擴充。官方文件要本地使用者開啟 <strong>Settings → Features → Use Compact Prompt</strong>，並把任務切小 (<a href="https://docs.cline.bot/running-models-locally/overview" target="_blank" rel="noopener noreferrer">Cline docs</a>)。它的原生 tool calling 只支援 Anthropic、OpenAI 等雲端供應商，本地供應商仍走 XML 文字協定 (<a href="https://cline.bot/blog/cline-v3-35" target="_blank" rel="noopener noreferrer">Cline v3.35</a>)。模型格式出錯時可能無限迴圈：有人回報 Qwen2.5-Coder-32B 輸出 JSON 工具呼叫，Cline 卻在等 XML (<a href="https://github.com/cline/cline/issues/10843" target="_blank" rel="noopener noreferrer">cline #10843</a>)。</p>
+<p><strong>Roo Code</strong> 已在 2026-04-21 宣布停止，repo 在 2026-05-15 封存，官方建議遷移到 Cline (<a href="https://localaimaster.com/blog/roo-code-shutdown-local-alternative" target="_blank" rel="noopener noreferrer">localaimaster</a>)。<strong>Kilo Code</strong> 是仍在維護的分支，能直接讀 <code>.roomodes</code> (<a href="https://kilo.ai/articles/roo-to-kilo-migration-guide" target="_blank" rel="noopener noreferrer">Kilo 遷移指南</a>)。</p>
+<p><strong>Copilot Chat BYOK</strong> 不需要 GitHub 帳號，可以完全離線使用。新的「Custom Endpoint」供應商支援 Chat Completions、Responses 或 Anthropic Messages，取代了已棄用的「OpenAI Compatible」和內建 Ollama 供應商。但它<strong>不能用本地模型做 inline 補全</strong> (<a href="https://code.visualstudio.com/docs/copilot/customization/language-models" target="_blank" rel="noopener noreferrer">VS Code docs</a>；<a href="https://code.visualstudio.com/blogs/2026/06/18/byok-vscode" target="_blank" rel="noopener noreferrer">VS Code blog</a>)。還有一個要注意的已知問題：llama.cpp #22684 回報 Qwen3.5/3.6 的工具呼叫在 Copilot 客戶端下被塞進 <code>reasoning_content</code>，該 issue 已以 stale 關閉，沒有修正 (<a href="https://github.com/ggml-org/llama.cpp/issues/22684" target="_blank" rel="noopener noreferrer">llama.cpp #22684</a>)。</p>
+<p><strong>Tab 補全</strong>用 llama.vscode（直連 llama-server、Tab 接受建議，另附 Llama Agent）或 Continue（對話模型加 1.5B FIM 模型的組合）(<a href="https://github.com/ggml-org/llama.vscode" target="_blank" rel="noopener noreferrer">llama.vscode</a>；<a href="https://insiderllm.com/guides/replace-github-copilot-local-llms-vscode/" target="_blank" rel="noopener noreferrer">insiderllm</a>)。Twinny 已封存。</p>
+<p><strong>終端機 agent 首推 OpenCode。</strong> 用 logging proxy 實測，第一回合的負擔差異很大 (<a href="https://systima.ai/blog/claude-code-vs-opencode-token-overhead" target="_blank" rel="noopener noreferrer">systima.ai</a>)：</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Harness</th>
+<th>系統提示</th>
+<th>工具定義</th>
+<th>首回合合計</th>
+<th>前綴快取</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>OpenCode</td>
+<td>約 2k</td>
+<td>約 4.8k</td>
+<td><strong>約 7k</strong></td>
+<td>前綴逐位元組相同，快取效果好</td>
+</tr>
+<tr>
+<td>Claude Code</td>
+<td>約 6.5k</td>
+<td>約 24k</td>
+<td><strong>約 33k</strong></td>
+<td>實際使用中可膨脹到 51–75k (<a href="https://www.xda-developers.com/claude-code-using-fifty-thousand-tokens-before-typed-prompt-fixed-it/" target="_blank" rel="noopener noreferrer">XDA</a>)</td>
+</tr>
+</tbody>
+</table></div>
+<p>兩者的任務通過率相同。在 8GB 預填只有數百 tok/s 的條件下，OpenCode 每次新對話少等大約一分鐘。</p>
+<p>Claude Code 透過 llama-server 的 <code>/v1/messages</code> 也能正常運作，Raschka 的測試是 5/5。但它累積歷史的速度很快，一個例子裡輸入 578k、輸出只有 4.5k (<a href="https://magazine.sebastianraschka.com/p/using-local-coding-agents" target="_blank" rel="noopener noreferrer">Raschka</a>)。Codex CLI 用 <code>--oss</code> 可以接 Ollama 或 LM Studio。Pi 的系統提示不到 1k，適合極度精簡的場景 (<a href="https://pinggy.io/blog/best_open_source_cli_coding_agents/" target="_blank" rel="noopener noreferrer">pinggy</a>)。</p>
+<p><strong>工具呼叫是本地方案最脆弱的環節。</strong> Qwen3.5/3.6 用 XML 風格的 <code>qwen3_coder</code> 工具格式，在 llama.cpp 上反覆出過解析問題：工具呼叫被印在 thinking 區塊內 (<a href="https://github.com/ggml-org/llama.cpp/issues/20837" target="_blank" rel="noopener noreferrer">#20837</a>)，或 <code>&lt;tool_call&gt;</code> 前面有一段文字就讓所有結構化呼叫失效 (<a href="https://github.com/openclaw/openclaw/issues/32916" target="_blank" rel="noopener noreferrer">openclaw #32916</a>)。今天（2026-10-07）還有新 issue 回報 PEG 解析器把格式正確的 <code>&lt;tool_call&gt;</code> 判成一般內容，失敗率 30–50% (<a href="https://github.com/ggml-org/llama.cpp/issues/30078" target="_blank" rel="noopener noreferrer">#30078</a>)。Unsloth 已修正 chat template (<a href="https://unsloth.ai/docs/models/qwen3.6" target="_blank" rel="noopener noreferrer">Unsloth Qwen3.6</a>)。對策是用最新的 Unsloth GGUF，並<strong>固定一個驗證過可用的 llama.cpp build</strong>，不要盲目追最新版。</p>
+<p>長 agent 對話還有一個 Qwen3.6 特有的問題：DeltaNet 的遞迴狀態可能讓 checkpoint 被拒，導致整段 prompt 重新預填。numsu repo 收錄了上游衍生的修正 (<a href="https://github.com/numsu/Qwen3.6-A3B-8GB-llama.cpp" target="_blank" rel="noopener noreferrer">numsu</a>)。這個修正是否已進主線未確認，所以 <code>--ctx-checkpoints</code> 和 <code>--cache-ram</code> 要保留。</p>
+<p><strong>LM Studio Bionic 在這張圖裡的位置。</strong> Bionic 是「LM Studio 給開放模型用的 agent」，一個獨立的桌面 app，建在 LM Studio 的 runtime 上，也能接零資料保留的雲端模型 (<a href="https://lmstudio.ai/bionic" target="_blank" rel="noopener noreferrer">lmstudio.ai/bionic</a>)。官方 changelog 上，「Bionic 1.1.7」（2026-10-01）附帶 llama.cpp 2.48.0 extension pack，1.1.3 加入 MTP (<a href="https://lmstudio.ai/changelog" target="_blank" rel="noopener noreferrer">LM Studio changelog</a>)。換句話說，Bionic 等於「harness + 引擎」打包在一起，角色和 OpenCode、Claude Code 相同。差別有兩點：它不在 VS Code 裡；它在 8GB 上的專家卸載能力受限於 LM Studio runtime 的設定。</p>
+<p>Linux 版的狀態不明。第三方部落格說 1.1.2（9 月 8 日）已支援 Linux x64/ARM64，可用 <code>install.sh</code>、AppImage 或 .deb 安裝，NVIDIA 走 llama.cpp (<a href="https://gyanaangan.in/blog/lm-studio-bionic-finally-runs-on-linux-v112-install-guide-and-everything-else-new-in-11/" target="_blank" rel="noopener noreferrer">gyanaangan</a>)。但抓取到的官方頁面只顯示 Windows 下載。對你以 VS Code 為中心的工作流程，Bionic 適合當作「裝得起來就試試」的獨立 agent，不是主力。</p>
+<h2 id="兩台機器的可直接啟動配方">兩台機器的可直接啟動配方</h2>
+<p>以下指令分三類標示：**【官方／他人實測配方】<strong>是引用來源的原始寫法；</strong>【推估起始值】**是依來源改寫給 8GB + 30GB 的起點，一定要經過下面的掃描步驟。</p>
+<h3 id="安裝-llamacpp">安裝 llama.cpp</h3>
+<p>兩台都可以直接下載 releases 頁的 Linux CUDA 12.8 或 13.4 預編譯檔。如果要自己編譯，一次編出同時支援兩張卡（sm_89 + sm_120）的版本，需要 nvcc ≥ 12.8：</p>
+<pre class="bash"><code># 自行編譯（同時支援 RTX 4060 Laptop 的 sm_89 與 RTX 5060 Ti 的 sm_120）
+nvidia-smi --query-gpu=name,compute_cap,driver_version --format=csv   # noble 應顯示 12.0、驅動 ≥ 570
+git clone https://github.com/ggml-org/llama.cpp &amp;&amp; cd llama.cpp
+cmake -B build -DGGML_CUDA=ON -DCMAKE_CUDA_ARCHITECTURES=&quot;89;120&quot; -DCMAKE_BUILD_TYPE=Release
+cmake --build build -j --config Release</code></pre>
+<h3 id="下載模型並掃描---n-cpu-moe">下載模型並掃描 <code>--n-cpu-moe</code></h3>
+<p>**【推估起始值】**掃描方法改寫自 <a href="https://openclawdc.com/blog/llama-cpp-moe-offload-flags-explained/" target="_blank" rel="noopener noreferrer">openclawdc</a>：</p>
+<pre class="bash"><code>hf download unsloth/Qwen3.6-35B-A3B-GGUF --include &quot;*UD-Q4_K_XL*&quot; --local-dir ~/models/qwen3.6-35b-a3b
+M=~/models/qwen3.6-35b-a3b/&lt;實際檔名&gt;.gguf   # 依下載結果填入
+for n in 40 38 36 34 32 30; do
+  ./build/bin/llama-bench -m &quot;$M&quot; -ngl 999 --n-cpu-moe $n -fa 1 -ctk q8_0 -ctv q8_0 \
+    -b 2048 -ub 2048 -p 8192 -n 128 -t 16      # resolute 改 -t 12，再試 -t 8
+done
+# 另開一個終端機監看 VRAM：nvidia-smi --query-gpu=memory.used,memory.total --format=csv -l 1</code></pre>
+<p>取速度崩落前的最小 N。如果還要同時跑 FIM 模型，就再加 2–3 層。</p>
+<h3 id="主模型伺服器">主模型伺服器</h3>
+<p>**【推估起始值】**參數組合自 <a href="https://github.com/ggml-org/llama.cpp/blob/master/tools/server/README.md" target="_blank" rel="noopener noreferrer">llama-server README</a>、<a href="https://huggingface.co/blog/Doctor-Shotgun/llamacpp-moe-offload-guide" target="_blank" rel="noopener noreferrer">Doctor-Shotgun</a>，取樣參數來自 <a href="https://unsloth.ai/docs/models/qwen3.6" target="_blank" rel="noopener noreferrer">Unsloth Qwen3.6</a>：</p>
+<pre class="bash"><code>./build/bin/llama-server -m &quot;$M&quot; --alias qwen3.6-35b-a3b \
+  -ngl 999 --n-cpu-moe 36 --fit off \
+  -c 65536 -ctk q8_0 -ctv q8_0 -fa on \
+  -b 2048 -ub 2048 --no-mmap \
+  -t 16 -np 1 --cache-ram 4096 \
+  --temp 0.6 --top-p 0.95 --top-k 20 --min-p 0 --presence-penalty 0 \
+  --host 127.0.0.1 --port 8080
+# resolute：-t 12、-c 49152~65536；若要關閉 thinking 做快速問答：
+#   --chat-template-kwargs &#39;{&quot;enable_thinking&quot;:false}&#39; --temp 0.7 --top-p 0.8 --presence-penalty 1.5
+# 想試 MTP：改用含 MTP head 的 GGUF（約多 1GB），加 --spec-type draft-mtp --spec-draft-n-max 2，並和關閉時比速度</code></pre>
+<p>各參數的理由：</p>
+<ul>
+<li><code>--no-mmap</code>：有使用者回報這樣做讓系統 RAM 占用從 98% 降到 71%。</li>
+<li><code>--cache-ram 4096</code>：預設是 8192 MiB，會和 30GB 的預算搶記憶體。</li>
+<li><code>-np 1</code>：避免自動開多個 slot，把 KV 預算切碎。</li>
+<li><code>--fit off</code>：讓調校結果可以重現。只想先求能跑的話，拿掉 <code>--n-cpu-moe</code> 和 <code>--fit off</code>，交給預設的 <code>--fit</code> 自動配置。</li>
+<li>模型有 vision 部分：如果改用 <code>-hf</code> 下載，會連 mmproj（約 900MB）一起抓並占用 VRAM，需要加 <code>--no-mmproj</code> 關掉。</li>
+</ul>
+<h3 id="備案gpt-oss-20b">備案：gpt-oss-20b</h3>
+<p>**【官方配方，8GB 無公開速度數據】**出自 <a href="https://github.com/ggml-org/llama.cpp/discussions/15396" target="_blank" rel="noopener noreferrer">Discussion #15396</a>：</p>
+<pre class="bash"><code>llama-server -hf ggml-org/gpt-oss-20b-GGUF --ctx-size 32768 --jinja -ub 2048 -b 2048 --n-cpu-moe 16</code></pre>
+<h3 id="tab-補全fim伺服器">Tab 補全（FIM）伺服器</h3>
+<p>**【官方預設檔】**出自 <a href="https://github.com/ggml-org/llama.vscode" target="_blank" rel="noopener noreferrer">llama.vscode</a>：</p>
+<pre class="bash"><code>llama-server --fim-qwen-1.5b-default    # 8GB 以下的預設；llama.vscode 端點設成此伺服器的位址</code></pre>
+<p>這個 FIM 伺服器會吃掉約 1–2.5GB VRAM（推估）。如果補全不是一直在用，比較好的做法是只在寫程式時開，跑長 agent 任務時關掉，把 VRAM 還給主模型的專家。</p>
+<p>**【推估】**resolute 另有一個選項：用 Vulkan 版 llama.cpp 把 1.5B 放到 Radeon 890M 內顯上跑。890M 跑 1B 模型約 551 tok/s 預填、67 tok/s 生成 (<a href="https://www.localscore.ai/accelerator/721" target="_blank" rel="noopener noreferrer">localscore</a>)，這樣 dGPU 的 VRAM 可以全部留給主模型。這個做法沒有人實際驗證過。</p>
+<h3 id="接上-harness">接上 harness</h3>
+<p>**【官方設定】**Claude Code 的寫法改自 <a href="https://huggingface.co/blog/ggml-org/anthropic-messages-api-in-llamacpp" target="_blank" rel="noopener noreferrer">HF blog</a> 與 <a href="https://lmstudio.ai/docs/integrations/claude-code" target="_blank" rel="noopener noreferrer">LM Studio docs</a>。OpenCode 的設定格式依其文件慣例，請以當前版本文件為準：</p>
+<pre class="bash"><code># Claude Code（主模型 context 至少 64K）
+export ANTHROPIC_BASE_URL=http://127.0.0.1:8080
+export ANTHROPIC_AUTH_TOKEN=local
+export CLAUDE_CODE_ATTRIBUTION_HEADER=0
+claude --model qwen3.6-35b-a3b</code></pre>
+<p>OpenCode 設定檔 <code>~/.config/opencode/opencode.json</code>：</p>
+<pre class="json"><code>{
+  &quot;$schema&quot;: &quot;https://opencode.ai/config.json&quot;,
+  &quot;provider&quot;: {
+    &quot;llamacpp&quot;: {
+      &quot;npm&quot;: &quot;@ai-sdk/openai-compatible&quot;,
+      &quot;name&quot;: &quot;llama.cpp (local)&quot;,
+      &quot;options&quot;: { &quot;baseURL&quot;: &quot;http://127.0.0.1:8080/v1&quot; },
+      &quot;models&quot;: { &quot;qwen3.6-35b-a3b&quot;: { &quot;name&quot;: &quot;Qwen3.6-35B-A3B&quot; } }
+    }
+  }
+}</code></pre>
+<p>VS Code 這邊有兩種接法：</p>
+<ul>
+<li><strong>Cline</strong>：選 OpenAI Compatible，Base URL 填 <code>http://127.0.0.1:8080/v1</code>，然後開啟 Compact Prompt。</li>
+<li><strong>Copilot Chat</strong>：選「Custom Endpoint」供應商，指向同一個位址。</li>
+</ul>
+<h3 id="兩台機器各自要確認的事">兩台機器各自要確認的事</h3>
+<p>resolute 有三件事：</p>
+<ul>
+<li>用 <code>nvidia-smi -q -d POWER</code> 確認功耗上限沒有卡在 60W 附近，必要時執行 <code>sudo systemctl enable --now nvidia-powerd</code>。</li>
+<li>確認桌面由內顯驅動，<code>nvidia-smi</code> 裡不應該看到 gnome-shell 占用 dGPU。</li>
+<li>HX 370 是 Zen5 加 Zen5c 共 12 核，<code>-t 12</code> 和 <code>-t 8</code> 要各測一次。</li>
+</ul>
+<p>noble 有兩件事：</p>
+<ul>
+<li>如果螢幕接在 5060 Ti 上，桌面會吃掉部分 VRAM。改接主機板輸出（9950X 有內顯）可以多放一兩層專家（推估）。</li>
+<li><code>-t 16</code> 對應 16 個實體核心。來源建議用上全部核心算專家 (<a href="https://github.com/ggml-org/llama.cpp/discussions/21112" target="_blank" rel="noopener noreferrer">Discussion #21112</a>)。</li>
+</ul>
+<h2 id="結論">結論</h2>
+<p>這個問題的答案不是單一模型，而是一個分工原則：<strong>讓 8GB VRAM 專門放「每個 token 都會用到」的東西（attention、shared expert、KV、FIM 小模型），讓 RAM 頻寬去扛「偶爾才用到」的 routed experts。</strong> MoE 加上混合線性注意力，讓 35B 等級的程式代理在消費級筆電上第一次有了實用速度。但瓶頸也因此從「生成多快」轉到「預填多快」，所以 harness 的提示長度和前綴快取命中率，現在和模型分數一樣是選型條件。選 OpenCode 而不是 Claude Code，在你的硬體上省下的等待時間，可能比從 Q4 換成 Q6 多出的品質更有價值。</p>
+<p>接下來最有價值的一步，是在 resolute 和 noble 上各跑一輪 <code>llama-bench</code> 掃描（<code>--n-cpu-moe</code> × <code>-ub</code> × KV 型別），補上目前所有推估值背後缺的那一塊實測。附帶幾個值得留意的變數：llama.cpp 的滾動 build 隨時可能修好或弄壞 Qwen 的工具呼叫解析；MTP 在 CPU 專家卸載下的實際效益還沒有人量過；Bionic 的 Linux 版一旦正式出現，LM Studio 系的一體化方案就可能成為「省事版」的合理選項。</p>
+
+</main>
+</body>
+</html>

@@ -1,0 +1,11 @@
+# Codex 專用設定（CODEX_HOME 指向專案內 .home/codex，不影響 ~/.codex）
+# 接 scripts/serve-main.sh 起的 llama-server
+
+model = "qwen3.6-35b-a3b"
+model_provider = "harness-lab"
+model_context_window = 65536
+
+[model_providers.harness-lab]
+name = "llama.cpp (harness-lab)"
+base_url = "http://127.0.0.1:8080/v1"
+wire_api = "responses"

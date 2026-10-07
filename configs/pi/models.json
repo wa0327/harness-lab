@@ -1,0 +1,28 @@
+{
+  "providers": {
+    "harness-lab": {
+      "baseUrl": "http://127.0.0.1:8080/v1",
+      "api": "openai-completions",
+      "apiKey": "none",
+      "models": [
+        {
+          "id": "qwen3.6-35b-a3b",
+          "contextWindow": 65536,
+          "maxTokens": 16384,
+          "reasoning": true,
+          "samplingParams": {
+            "temperature": 1.0,
+            "top_p": 0.95,
+            "top_k": 20
+          },
+          "samplingParamsByThinkingLevel": {
+            "off": {
+              "temperature": 0.7,
+              "top_p": 0.8
+            }
+          }
+        }
+      ]
+    }
+  }
+}

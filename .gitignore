@@ -1,0 +1,16 @@
+# 專案內安裝的工具、模型與快取
+vendor/
+models/
+.venv/
+node_modules/
+.cache/
+.home/
+
+# 跑分的原始錯誤輸出
+results/*.log
+
+# harness 測試的工作目錄
+runs/
+
+# Python 快取
+__pycache__/

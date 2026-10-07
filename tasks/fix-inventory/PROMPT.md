@@ -1,0 +1,1 @@
+Run the tests with `python3 -m unittest -q`. Some tests fail because of bugs in inventory.py. Fix the bugs in inventory.py so that all tests pass. Do not modify test_inventory.py. When done, run the tests again to confirm they pass.

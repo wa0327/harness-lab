@@ -1,0 +1,1 @@
+Implement parse_duration and format_duration in duration.py according to SPEC.md. The tests are in test_duration.py; run them with `python3 -m unittest -q`. Do not modify test_duration.py or SPEC.md. Keep working until all tests pass.
