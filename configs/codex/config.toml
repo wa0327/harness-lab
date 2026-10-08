@@ -6,8 +6,8 @@ model_provider = "harness-lab"
 model_context_window = 131072   # qwen 的 CTX；用 glm 時伺服器只有 65536，要另外 -c model_context_window=65536
 
 # 思考強度（minimal、low、medium、high、xhigh…），經 Responses API 的 reasoning.effort 送出。
-# 尚未驗證 llama-server 會不會換成 Qwen／GLM 的 enable_thinking，所以預設不設。
-# 確定有效的關法在伺服器端：scripts/serve-main.sh --reasoning off（所有用戶端都不思考）
+# 實測 llama-server（Qwen）只認 "none"＝不思考，minimal、low、medium 都照樣思考；預設不設＝思考。
+# 伺服器端的 scripts/serve-main.sh --reasoning off 只改預設值，自己帶開關的用戶端（例如 Pi）照樣會思考
 # model_reasoning_effort = "low"
 
 [model_providers.harness-lab]

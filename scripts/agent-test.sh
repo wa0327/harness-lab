@@ -1,13 +1,23 @@
 #!/usr/bin/env bash
 # 用同一個題目測不同 harness：複製 evals/<題目> 到 logs/runs/<題目>/<harness>/<日期_時間>/，讓 harness 非互動解題，再自動驗證
-# 用法：scripts/agent-test.sh [--monitor] <題目> <pi|pi-router|codex|opencode|qwen|claude>   需要先啟動 scripts/serve-main.sh（claude 除外）
+# 用法：scripts/agent-test.sh [--monitor] [--thinking off] <題目> <pi|pi-router|codex|opencode|qwen|claude>   需要先啟動 scripts/serve-main.sh（claude 除外）
 # --monitor：執行期間即時顯示 agent 的思考、回覆、工具呼叫與結果（scripts/watch-agent.py）
+# --thinking off：關掉模型的思考，各 harness 用各自實測有效的方法（見下方 thinking_cfg）；claude 沒有關法，直接報錯
 set -euo pipefail
 source "$(dirname "$0")/../env.sh"
 
-usage="用法：scripts/agent-test.sh [--monitor] <題目> <pi|pi-router|codex|opencode|qwen|claude>，題目是 evals/ 下的目錄名稱"
-monitor=""; args=()
-for a in "$@"; do [[ "$a" == --monitor ]] && monitor=1 || args+=("$a"); done
+usage="用法：scripts/agent-test.sh [--monitor] [--thinking off] <題目> <pi|pi-router|codex|opencode|qwen|claude>，題目是 evals/ 下的目錄名稱"
+monitor="" thinking=""; args=()
+while (( $# )); do
+  case "$1" in
+    --monitor) monitor=1 ;;
+    --thinking) thinking="${2:-}"; shift ;;
+    --thinking=*) thinking="${1#*=}" ;;
+    *) args+=("$1") ;;
+  esac
+  shift
+done
+[[ -z "$thinking" || "$thinking" == off ]] || { echo "--thinking 只支援 off（不加就是 harness 預設的思考設定）" >&2; exit 2; }
 task="${args[0]:?$usage}"
 harness="${args[1]:?$usage}"
 PI_THINKING="${PI_THINKING:-}"   # 例：PI_THINKING=off scripts/agent-test.sh fix-inventory pi
@@ -21,6 +31,8 @@ SNAPSHOT_DIR=/tmp/agent-snapshots
 task_dir="$LAB_DIR/evals/$task"
 [[ -d "$task_dir" ]] || { echo "沒有這個題目：evals/$task" >&2; exit 2; }
 case "$harness" in pi|pi-router|codex|opencode|qwen|claude) ;; *) echo "未知的 harness：$harness" >&2; exit 2 ;; esac
+# Claude Code 的 alwaysThinkingEnabled=false、CLAUDE_CODE_DISABLE_THINKING=1 實測都關不掉 Opus 5.5 的思考
+[[ "$thinking" != off || "$harness" != claude ]] || { echo "claude 沒有關掉思考的方法，不支援 --thinking off" >&2; exit 2; }
 # 限時（秒）：命令列的 TIMEOUT 優先，其次是題目目錄的 TIMEOUT 檔，都沒有就 1800。時間到就結束 harness，照常評分
 TIMEOUT="${TIMEOUT:-$(cat "$task_dir/TIMEOUT" 2>/dev/null || echo 1800)}"
 
@@ -45,13 +57,42 @@ isolate=""; [[ -f "$task_dir/ISOLATE" ]] && isolate=1
 accept_max=""; [[ -f "$task_dir/ACCEPT" ]] && accept_max="$(cat "$task_dir/ACCEPT")" isolate=1
 # 題目檔：評分時一律用原檔蓋回去的那些（PROMPT.md 與標記檔以外的檔案）
 task_files=(); while IFS= read -r f; do task_files+=("$f"); done < <(
-  cd "$task_dir" && find . -type f ! -name PROMPT.md ! -name ISOLATE ! -name ACCEPT ! -name SNAPSHOT ! -name TIMEOUT -printf '%P\n' | LC_ALL=C sort)
+  cd "$task_dir" && find . -name __pycache__ -prune -o -type f ! -name PROMPT.md ! -name ISOLATE ! -name ACCEPT ! -name SNAPSHOT ! -name TIMEOUT -printf '%P\n' | LC_ALL=C sort)
 # harness-lab 裡沒被 .gitignore 排除的未追蹤檔案（logs/、.cache/ 不算），開始和結束時比對，抓 agent 用絕對路徑寫到外面
 lab_untracked() { git -C "$LAB_DIR" ls-files --others --exclude-standard | LC_ALL=C sort; }
 tmp_dirs=()   # 本次用到的 /tmp 目錄，結束時（包括中途出錯、被中斷）一律刪掉
 # 不管怎麼結束（出錯、被 kill、終端機關掉）都先收掉 harness：實測主程序意外結束時，背景的 harness 會繼續跑、
 # 一直佔著模型伺服器推理
 trap 'declare -F stop_harness > /dev/null && stop_harness; rm -rf "${tmp_dirs[@]}"' EXIT
+# --thinking off：伺服器開了 --reasoning off 也不夠，Pi 每個請求都自己帶 enable_thinking=true 蓋過伺服器預設。
+# 以下各 harness 的關法都經 logproxy 側錄請求、對 llama-server 實測過：伺服器只認 chat_template_kwargs 的
+# enable_thinking=false 和 reasoning effort "none"（minimal、low 照樣思考）
+codex_thinking=()
+if [[ "$thinking" == off ]]; then
+  thinking_cfg="$(mktemp -d)"; tmp_dirs+=("$thinking_cfg")
+  case "$harness" in
+    pi|pi-router) PI_THINKING=off ;;   # 送 enable_thinking=false，取樣參數也自動換成不思考用的
+    codex) codex_thinking=(-c 'model_reasoning_effort="none"') ;;   # 送 reasoning.effort=none
+    opencode)
+      # 疊加一份設定讓這個模型送 reasoning_effort=none（內建的 --variant none 對自訂模型沒作用，什麼都不送）
+      printf '{"provider":{"%s":{"models":{"%s":{"options":{"reasoningEffort":"none"}}}}}}\n' "$MAIN_PROVIDER" "$MAIN_ALIAS" > "$thinking_cfg/opencode.json"
+      export OPENCODE_CONFIG="$thinking_cfg/opencode.json" ;;
+    qwen)
+      # Qwen Code 沒有對應的旗標：另給一份系統設定，每個模型的 generationConfig 加 reasoning=false（送 enable_thinking=false）。
+      # 設定檔是帶 // 註解行的 JSON，去掉註解行再解析
+      python3 -I - "$QWEN_HOME/settings.json" "$thinking_cfg/qwen-system.json" <<'EOF'
+import json, sys
+src, dst = sys.argv[1], sys.argv[2]
+d = json.loads("\n".join(l for l in open(src) if not l.lstrip().startswith("//")))
+providers = d["modelProviders"]
+for models in providers.values():
+    for m in models:
+        m.setdefault("generationConfig", {})["reasoning"] = False
+json.dump({"modelProviders": providers}, open(dst, "w"), ensure_ascii=False)
+EOF
+      export QWEN_CODE_SYSTEM_SETTINGS_PATH="$thinking_cfg/qwen-system.json" ;;
+  esac
+fi
 if [[ -z "$snapshot" ]]; then
   task_orig="$(mktemp -d)"; tmp_dirs+=("$task_orig")
   cp -a "$task_dir/." "$task_orig/"
@@ -174,7 +215,7 @@ case "$harness" in
       > "$run/agent.jsonl" 2> "$run/agent.stderr" ;;
   codex)
     # 不加 --ephemeral：要讓 Codex 寫 rollout 檔，子 agent 的紀錄才收得到（見下方 collect-subagents.py）
-    timeout "$TIMEOUT" codex exec --json -o "$run/final.md" -C "$work" --skip-git-repo-check -s workspace-write -c "model_provider=\"$MAIN_PROVIDER\"" -c "model=\"${CODEX_MODEL:-$MAIN_ALIAS}\"" "$prompt" \
+    timeout "$TIMEOUT" codex exec --json -o "$run/final.md" -C "$work" --skip-git-repo-check -s workspace-write -c "model_provider=\"$MAIN_PROVIDER\"" -c "model=\"${CODEX_MODEL:-$MAIN_ALIAS}\"" "${codex_thinking[@]}" "$prompt" \
       > "$run/agent.jsonl" 2> "$run/agent.stderr" ;;
   opencode)
     # OpenCode 以 git 根目錄當專案根目錄，不 git init 的話會是 harness-lab，實測模型因此跑去改了 evals/ 的原檔
@@ -284,9 +325,10 @@ if [[ -n "$isolate" ]]; then
 fi
 [[ -z "$interrupted" ]] || summary="$summary；被中斷（Ctrl+C）"
 if [[ -z "$snapshot" ]]; then
-  if ! diff -r "$task_orig" "$task_dir" > /dev/null 2>&1; then
+  # __pycache__ 不算：在題目目錄跑過 Python 就會產生，不是 agent 改的
+  if ! diff -r -x __pycache__ "$task_orig" "$task_dir" > /dev/null 2>&1; then
     # agent 跑出 run 目錄改了題目原檔：run 目錄裡的結果不代表它解了題。原本的內容在 escaped.diff 的 - 那一側
-    diff -ruN "$task_orig" "$task_dir" > "$run/escaped.diff" || true
+    diff -ruN -x __pycache__ "$task_orig" "$task_dir" > "$run/escaped.diff" || true
     verdict=FAIL summary="改到 evals/$task 原檔（見 escaped.diff）"
     echo "警告：$harness 改到了 evals/$task 的原檔，請照 $run/escaped.diff 還原" >&2
   fi
@@ -303,7 +345,8 @@ if [[ -n "$new_files" ]]; then
   echo "警告：執行期間 harness-lab 多了以下檔案，可能是 $harness 寫到工作目錄外（已複製到 $run/escaped/）：" >&2
   echo "$new_files" >&2
 fi
-label="$harness${PI_THINKING:+ (thinking=$PI_THINKING)}${CODEX_MODEL:+ (router)}"
+th="${thinking:-$PI_THINKING}"; [[ "$harness" == pi* || -n "$thinking" ]] || th=""   # PI_THINKING 只對 Pi 有作用
+label="$harness${th:+ (thinking=$th)}${CODEX_MODEL:+ (router)}"
 model="$MAIN_ALIAS"; [[ "$harness" != claude ]] || model="$CLAUDE_MODEL"
 [[ "$MODEL" == qwen || "$harness" == claude ]] || label="$label [$MAIN_ALIAS]"   # 預設模型不加，和舊紀錄的標籤一致
 
