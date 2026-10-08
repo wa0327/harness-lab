@@ -20,8 +20,9 @@
    `git restore --staged` 或 `git reset -- <paths>`（簽完想讓主 index 對齊新 HEAD 時
    最容易誤用）。那會讓正在編輯的 session 讀到被換掉的檔案而毫不知情。
    真的判斷需要動到，**先問使用者**。
-4. **建 commit 前把將簽入的內容給使用者複核**（`git commit --dry-run -- <paths>`，
-   或 `build-tree.sh` 印出的 BASE→TREE），等說簽入才動 HEAD。
+4. **建 commit 前核對將簽入的內容**（`git commit --dry-run -- <paths>`，或
+   `build-tree.sh` 印出的兩份差異）。恰好是本 session 的全部改動、沒混到別人的，就直接
+   簽，簽完回報；任何一項對不上或界線拿不準，先給使用者複核，等說簽入才動 HEAD。
 
 **記憶檔與筆記也是 repo 內容**：repo 有追蹤的記憶檔（`.claude/memory/`；
 `git ls-files .claude/memory` 有輸出就是）與筆記（例如 `wiki/notes/`），本 session

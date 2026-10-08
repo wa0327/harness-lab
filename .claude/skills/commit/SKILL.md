@@ -14,8 +14,8 @@ restore。以下是怎麼做到。
 
 | 腳本 | 做什麼 |
 |---|---|
-| `.claude/skills/commit/build-tree.sh` | 在臨時 index 組出要簽的 tree，印出複核用的兩份差異；什麼都不改 |
-| `.claude/skills/commit/land.sh` | 把複核過的 tree 簽成 commit、讓主 index 跟上，保留別人 staged 的內容 |
+| `.claude/skills/commit/build-tree.sh` | 在臨時 index 組出要簽的 tree，印出核對用的兩份差異；什麼都不改 |
+| `.claude/skills/commit/land.sh` | 把核對過的 tree 簽成 commit、讓主 index 跟上，保留別人 staged 的內容 |
 
 ## 一、粒度判準
 
@@ -79,7 +79,7 @@ repo 內的筆記目錄（例如 `wiki/notes/`）照一般檔案處理。新記�
 ## 四、路線 1：已追蹤、整檔都是自己的 → pathspec
 
 ```
-git commit --dry-run -- <paths>     # 先給使用者複核
+git commit --dry-run -- <paths>     # 先自己核對，條件同路線 2 第 3 步
 git commit -- <paths>
 ```
 
@@ -137,9 +137,19 @@ TREE→工作區出現本 session 的行＝漏簽；別人的 `-X` 和 `+X'` 中
 （例如 `-L26`、` L25-mine`、`+L26-other`）＝第 1 步的順序排錯。改 patch 重跑即可，
 這一步什麼都沒動。
 
-### 3. 給使用者複核
+### 3. 核對無誤就直接簽，拿不準才停
 
-把 BASE→TREE 給使用者看，等說簽入。
+使用者說「簽入」就是放行，以下全部成立就直接進第 4 步，不再回頭問：
+
+- 涵蓋性檢查（第二節）差集為空，或每個缺項都說得出理由
+- BASE→TREE 只有本 session 的改動、而且全部都在
+- TREE→工作區沒有本 session 的行，別人的改動都是原樣、順序沒亂
+- 界線判定有把握（不是 context 壓縮後、跨 session 續接後憑印象還原的）
+
+任何一項不成立，或判斷某段改動是誰的時候猶豫了，就停下來：把 BASE→TREE、拿不準的
+地方、commit message 給使用者看，等說簽入。
+
+簽完一律回報：commit 雜湊與標題、簽了哪些檔、留在工作區沒簽的是什麼。
 
 ### 4. 簽入
 
@@ -152,7 +162,7 @@ commit message 寫進 `<scratchpad>/msg`，然後：
 BASE、TREE 照抄第 2 步的輸出。結果：
 
 - **`HEAD 已不是 BASE`**：別的 session 剛簽入，這次**什麼都沒簽**。從第 1 步重做
-  （BASE 變了，別人可能簽了同一個檔，patch 要重新產生）並重新複核。
+  （BASE 變了，別人可能簽了同一個檔，patch 要重新產生），第 3 步重新核對。
 - **`主 index 合併`**：那個檔案裡別人 staged 的部分保留住了，正常。
 - **`主 index 不動`**：別人 staged 的內容和本次簽入重疊，腳本不碰它；`git status` 會
   把本次的改動顯示成 staged 的反向改動。告訴使用者是哪幾個檔，**不要自己 reset**。

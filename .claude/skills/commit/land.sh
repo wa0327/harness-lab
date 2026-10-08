@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# 簽入路線 2 的後半：把使用者複核過的 TREE 簽成 commit，再讓主 index 跟上新 HEAD。
+# 簽入路線 2 的後半：把核對過的 TREE 簽成 commit，再讓主 index 跟上新 HEAD。
 #
 # 用法：land.sh <BASE> <TREE> <commit message 檔>
 #       land.sh --sync <BASE> <TREE>     只重做主 index 同步（上次被 index.lock 擋下時）
@@ -26,7 +26,7 @@ tree=$(git rev-parse --verify "$2^{tree}")
 if [[ $sync_only -eq 0 ]]; then
   commit=$(git commit-tree "$tree" -p "$base" -F "$msg")
   if ! git update-ref -m "commit: $(head -n1 "$msg")" HEAD "$commit" "$base"; then
-    echo "HEAD 已不是 BASE（別的 session 剛簽入）：沒有簽入，從 build-tree.sh 重做並重新複核" >&2
+    echo "HEAD 已不是 BASE（別的 session 剛簽入）：沒有簽入，從 build-tree.sh 重做並重新核對" >&2
     exit 1
   fi
   echo "已簽入 $(git log -1 --format='%h %s' "$commit")"

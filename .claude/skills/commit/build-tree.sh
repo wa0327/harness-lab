@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # 簽入路線 2 的前半：在臨時 index 上組出「BASE＋本 session 的改動」的 tree。
-# 主 index、工作區、HEAD 都不碰；組好的 tree 交給使用者複核，再由 land.sh 簽入。
+# 主 index、工作區、HEAD 都不碰；組好的 tree 核對過，再由 land.sh 簽入。
 #
 # 用法：build-tree.sh [-p <patch>]... [--] [<整檔路徑>...]
 #   -p <patch>  只含本 session hunk 的 patch，以 HEAD 為底（產生方式見 SKILL.md）
