@@ -41,6 +41,7 @@ export HF_HOME="$LAB_DIR/.cache/huggingface"
 export LLAMA_CACHE="$LAB_DIR/.cache/llama.cpp"
 export npm_config_cache="$LAB_DIR/.cache/npm"
 export PI_CODING_AGENT_DIR="$LAB_DIR/.home/pi"
+export LLAMA_API_KEY="$API_KEY"   # Pi 內建 llama.cpp provider（router 模式）；/login 沒存 key 時讀這個
 export CODEX_HOME="$LAB_DIR/.home/codex"
 
 case ":$PATH:" in
