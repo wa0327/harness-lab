@@ -90,7 +90,7 @@ scripts/compare-runs.py --latest fix-inventory
 
 ### 設定範本與 `.home/` 的關係
 
-`configs/` 是進版控的**範本**；`.home/` 是 harness **實際讀寫**的設定目錄（`env.sh` 用 `CODEX_HOME`、`PI_CODING_AGENT_DIR` 指過去），裡面還有 harness 自己寫回的狀態，例如 Codex 的信任清單。
+`configs/` 是進版控的**範本**；`.home/` 是 harness **實際讀寫**的設定目錄（`env.sh` 用 `PI_CODING_AGENT_DIR`、`CODEX_HOME`、`QWEN_HOME` 指過去，OpenCode 由 `bin/opencode` 處理），裡面還有 harness 自己寫回的狀態，例如 Codex 的信任清單。
 
 `setup-tools.sh` 只在 `.home/` 裡**還沒有**設定檔時才複製範本，之後不會覆蓋。所以範本改了不會自動同步：
 
@@ -146,17 +146,13 @@ Pi 走 router 時用的 `LLAMA_API_KEY` 也由 `env.sh` 設成同一個值。三
 
 以前的版本預設不驗證，舊機器上已經存在的 `.home` 設定（Pi 寫死 `"none"`、Codex 註解掉 `env_key`）會在重跑 `scripts/setup-tools.sh` 時自動改成讀 `API_KEY`。
 
-另開終端機使用 harness：
+另開終端機使用 harness，各自的用法見下方「使用各 harness」：
 
 ```bash
 source env.sh               # 讓 pi、codex、opencode、qwen、hf、llama-* 指向專案內的版本與設定
-pi --model harness-lab/qwen3.6-35b-a3b --thinking off   # 小改動用 off／low 最快；難題再用 medium
-codex
-opencode                    # 換模型：opencode -m harness-lab/glm-4.7-flash
-qwen                        # 換模型：qwen -m glm-4.7-flash
+cd ~/某個專案
+pi --model harness-lab/qwen3.6-35b-a3b --thinking off
 ```
-
-OpenCode 和 Qwen Code 都**沒有沙箱**，shell 指令以使用者權限直接執行（Pi 也是）。只有 Codex 有 `workspace-write` 沙箱。
 
 ### 切換主模型
 
@@ -172,6 +168,70 @@ MODEL=glm scripts/agent-test.sh pi       # 紀錄的標籤會加上 [glm-4.7-fla
 整個終端機都要換的話，用 `. env.sh glm`（換回來是 `. env.sh qwen`），之後執行的腳本、`pi`、`codex` 都會跟著用。注意不要打成 `MODEL=glm . env.sh`：bash 會在 source 結束後把 `MODEL` 還原，之後的腳本又會回到 qwen。新增模型時，在 `env.sh` 的 `case` 加一段（`N_CPU_MOE` 照現有寫法讀 `N_CPU_MOE_<名稱>`，讓各機器能在 `env.local.sh` 覆寫），並在 `configs/pi/models.json` 加上取樣參數。
 
 想走 Pi 官方的 router 模式時，改跑 `scripts/serve-router.sh`。router 會依請求的模型名稱（檔名，如 `Qwen3.6-35B-A3B-UD-Q4_K_XL`）自動載入，所以 Codex 等一般用戶端不必先手動載入。Pi 這邊，第一次要在互動模式裡執行 `/login llama.cpp`（key 可留空，會讀 env.sh 匯出的 `LLAMA_API_KEY`，和 `API_KEY` 同值）和 `/llama`，模型清單才會存下來，之後才能用 `pi --model llama.cpp/Qwen3.6-35B-A3B-UD-Q4_K_XL`。resolute 上已經做過這一步。
+
+## 使用各 harness
+
+共同前提：
+
+1. 主模型伺服器在跑（`scripts/serve-main.sh`）。
+2. 終端機先 `source env.sh`。VS Code 等從舊環境繼承了 `MODEL` 的終端機，用 `. env.sh qwen` 明確指定，免得和伺服器上的模型對不起來。
+3. `cd` 到要讓 agent 工作的專案目錄再啟動。key 由 `env.sh` 自動帶上，不用另外設定。
+
+### 指令對照
+
+| | Pi | Codex | OpenCode | Qwen Code |
+|---|---|---|---|---|
+| 互動模式 | `pi --model harness-lab/qwen3.6-35b-a3b` | `codex` | `opencode` | `qwen` |
+| 單次執行後結束 | `pi -p --model ... "題目"` | `codex exec "題目"` | `opencode run "題目"` | `qwen "題目"` |
+| 帶著題目進互動模式 | `pi --model ... "題目"` | `codex "題目"` | `opencode --prompt "題目"` | `qwen -i "題目"` |
+| 換成 GLM | `--model harness-lab/glm-4.7-flash` | `-m glm-4.7-flash` | `-m harness-lab/glm-4.7-flash` | `-m glm-4.7-flash` |
+| 調思考 | `--thinking off` 或 `medium` | 見下方說明 | 見下方說明 | 見下方說明 |
+| 接續上次對話 | `-c`（最近一次）、`-r`（挑選） | `codex resume --last`、`codex resume` | `-c`、`-s <id>` | `-c`、`-r` |
+| 沙箱 | 無 | `-s read-only`／`workspace-write` | 無 | 無（沒設定 docker） |
+| 自動核准 | 不詢問，一律執行 | `--approve-for-me`，或 `-s danger-full-access` | `run` 加 `--auto` | `-y`，或 `--approval-mode auto-edit` |
+| 機器可讀輸出 | `--mode json` | `--json` | `--format json` | `-o stream-json` |
+
+換模型時，伺服器也要跑那個模型（`MODEL=glm scripts/serve-main.sh`），見下方「切換主模型」。
+
+### Pi
+
+- **要指定 `--model`**：清單裡有好幾個模型（`pi --list-models` 可以看），不指定的話不一定挑到伺服器上的那個。
+- **思考只有 `off` 和 `medium` 兩段**：其他等級在 `models.json` 裡沒有對應，模型不支援。小改動用 `off` 最快，難題再開 `medium`。也可以寫成 `--model harness-lab/qwen3.6-35b-a3b:off`。
+- **只想讀、不讓它改檔**：`pi --tools read,grep,find,ls`。
+- **沒有沙箱，也不會逐一詢問**：`bash` 以你的權限直接執行，所以只在可以承受的目錄裡用。
+- **其他**：互動模式裡 Ctrl+P 切換模型。`--no-session` 不留對話紀錄，`--export <檔案>` 把對話匯出成 HTML。
+
+### Codex
+
+- **預設模型寫在 `.home/codex/config.toml`**，一般直接打 `codex` 就好。
+- **每次啟動會警告 `Model metadata ... not found`**：Codex 沒有本地模型的資料，改用預設值，可以忽略。
+- **沙箱**：指令在沙箱裡執行，需要超出沙箱時（例如寫工作目錄以外的地方）才會詢問。`codex exec` 預設是唯讀，要讓它改檔得加 `-s workspace-write`，只能寫工作目錄。
+- **第一次在某個專案使用時，會詢問要不要信任這個目錄**，同意後會寫回 `.home/codex/config.toml`。
+- **思考強度** `model_reasoning_effort`（設定檔或 `-c model_reasoning_effort='"low"'`）**對 llama-server 是否有效還沒驗證**。確定有效的作法是伺服器端關掉思考：`scripts/serve-main.sh --reasoning off`，但這樣所有 harness 都不會思考。
+- **改檔方式**：實測中 Codex 一律用 `sed` 或 heredoc 改檔，沒用過 `apply_patch`。小修沒問題，大檔案局部修改時要多檢查。
+- **其他**：`codex apply` 把 agent 的改動套到 git 工作目錄，`codex review` 做非互動的程式碼審查。
+
+### OpenCode
+
+- **一定要用 `bin/opencode`**：`source env.sh` 之後打 `opencode` 就是它。不要直接執行 `node_modules/.bin/opencode`，否則設定和資料會寫進家目錄。
+- **專案根目錄是 git repo 的根目錄，不是目前的目錄**：在 repo 的子目錄裡啟動時，它還是會讀、改子目錄以外的檔案。實測時它就因此跑去改了 `evals/` 的原檔。只想讓它動某個子目錄的話，在那個子目錄裡另外 `git init`，或乾脆換到 repo 外面。
+- **第一次用到搜尋工具會下載 ripgrep**（放到 `.home/opencode/`），大約要等一分半，之後就不會了。
+- **思考**：`opencode run --thinking` 會把思考內容顯示出來。`--variant`（思考強度）對 llama-server 是否有效還沒驗證。
+- **沒有沙箱**：`bash` 以你的權限直接執行。
+
+### Qwen Code
+
+- **直接加題目是單次執行**：`qwen "題目"` 跑完就結束。要帶著題目繼續互動，用 `qwen -i "題目"`。
+- **核准模式** `--approval-mode`：
+  - `plan`：只分析，不改檔也不執行指令。
+  - `default`：改檔和執行指令前都會詢問。
+  - `auto-edit`：改檔自動通過，執行指令前仍會詢問。
+  - `yolo`（等同 `-y`）：全部自動通過。
+
+  非互動執行時沒人能回答詢問，要用 `-y`。
+- **沒有沙箱**：`-s` 需要 docker 或 podman，這裡沒有設定，所以 `-y` 時 shell 指令以你的權限直接執行。
+- **背景功能已在範本裡關掉**：自動 memory 擷取、memory 整併、工具摘要都會在背景另外呼叫模型，在單一本地伺服器上會拖慢主任務。要用的話改 `.home/qwen/settings.json`。
+- **其他**：`--chat-recording false` 不留對話紀錄。`--max-wall-time 10m` 限制總時間，適合無人看管時用。
 
 ## 腳本
 
@@ -205,7 +265,7 @@ MODEL=glm scripts/agent-test.sh pi       # 紀錄的標籤會加上 [glm-4.7-fla
 ## 測試結果（resolute）
 
 - **速度**：預填約 1,160 tok/s、生成約 43 tok/s（`--n-cpu-moe 38`、`-ub 4096`）。
-- **解題**：Pi 和 Codex 兩道題全部通過。關掉思考的 Pi 解較難的題目只要 66 秒；開 medium 思考要 3 到 6 分鐘。
+- **解題**：Pi、Codex、OpenCode、Qwen Code 兩道題全部通過。關掉思考的 Pi 解較難的題目只要 66 秒；開思考時各 harness 要 2 到 10 分鐘，主要看模型想了多久。
 
 詳見 [reports/resolute 實測結果.md](<reports/resolute 實測結果.md>)。
 
