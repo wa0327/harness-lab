@@ -10,58 +10,106 @@ TIMEOUT="${TIMEOUT:-1800}"
 PI_THINKING="${PI_THINKING:-}"   # 例：PI_THINKING=off scripts/agent-test.sh pi
 CODEX_MODEL="${CODEX_MODEL:-}"   # 例：接 router 時 CODEX_MODEL=Qwen3.6-35B-A3B-UD-Q4_K_XL
 
-# run 目錄在 harness-lab 的 git repo 裡，agent 有可能跑去改題目原檔。原檔不乾淨就不跑，免得複製到被改過的版本
-evals_state() { git -C "$LAB_DIR" status --porcelain --untracked-files=all -- "evals/$task"; }
-if [[ -n "$(evals_state)" ]]; then
+task_dir="$LAB_DIR/evals/$task"
+[[ -d "$task_dir" ]] || { echo "沒有這個題目：evals/$task" >&2; exit 2; }
+
+# run 目錄在 harness-lab 的 git repo 裡，agent 有可能跑出 run 目錄改到工作區，開始和結束時各記一次狀態來比對。
+# 一般題目從 evals/<題目> 複製，原檔不乾淨就不跑，免得複製到被改過的版本。
+# SNAPSHOT 題目的內容來自指定的 commit，不受工作區影響，不檢查是否乾淨；agent 可能改到任何地方，所以看整個工作區
+if [[ -f "$task_dir/SNAPSHOT" ]]; then watch=.; else watch="evals/$task"; fi
+lab_state() { git -C "$LAB_DIR" status --porcelain --untracked-files=all -- "$watch"; }
+state_before="$(lab_state)"
+if [[ "$watch" != . && -n "$state_before" ]]; then
   echo "evals/$task 有未提交的改動，先還原（git checkout -- evals/$task，並刪掉多出來的檔案）再跑：" >&2
-  evals_state >&2; exit 1
+  echo "$state_before" >&2; exit 1
 fi
 
 run="$LOG_DIR/runs/$task-$harness-$(date +%Y%m%d-%H%M%S)"
 mkdir -p "$run"
-cp -a "$LAB_DIR/evals/$task/." "$run/"
-prompt="$(cat "$run/PROMPT.md")"
-before="$(sha256sum "$run"/test_*.py)"
+work="$run" extra_dir=""   # agent 的工作目錄；extra_dir 是工作目錄以外還要讓它寫的地方
+if [[ "$watch" == . ]]; then
+  # 題目就是 harness-lab 本身（例如審查 README）：在 SNAPSHOT 指定 commit 的快照裡工作。
+  # 快照每個 commit 只拉一次，存在 .cache/snapshots/，本身是只有一個 commit 的 git repo（看不到之後的歷史），
+  # 各 harness 以 git 根目錄判斷專案根目錄時也會停在這裡。開跑前一律 reset + clean 回到乾淨狀態，
+  # 產出寫到 output/，它是指向 run 目錄的符號連結。PROMPT.md 不放進快照，免得 agent 把它當成專案的一部分
+  rev="$(git -C "$LAB_DIR" rev-parse --verify "$(cat "$task_dir/SNAPSHOT")^{commit}")"
+  work="$LAB_DIR/.cache/snapshots/$rev"
+  mkdir -p "${work%/*}"
+  exec 9> "$work.lock"   # 快照是共用的，同時只能有一個 run 在用
+  flock -n 9 || { echo "另一個 run 正在用 $work" >&2; exit 1; }
+  if [[ ! -d "$work" ]]; then
+    rm -rf "$work.tmp" && mkdir "$work.tmp"
+    git -C "$LAB_DIR" archive "$rev" | tar -x -C "$work.tmp"
+    git -C "$work.tmp" init -q && git -C "$work.tmp" add -A
+    git -C "$work.tmp" -c user.name=harness-lab -c user.email=harness-lab@localhost commit -qm "harness-lab $rev"
+    echo /output >> "$work.tmp/.git/info/exclude"
+    mv -T "$work.tmp" "$work"
+  fi
+  git -C "$work" reset -q --hard && git -C "$work" clean -qffdx
+  extra_dir="$run/output"
+  mkdir "$extra_dir" && ln -s "$extra_dir" "$work/output"
+else
+  cp -a "$task_dir/." "$run/"
+fi
+prompt="$(cat "$task_dir/PROMPT.md")"
+has_tests=$(compgen -G "$run/test_*.py" > /dev/null && echo 1 || true)   # 沒有標準答案的題目不放測試，結果由人工判斷
+before="$([[ -z "$has_tests" ]] || sha256sum "$run"/test_*.py)"
 
 # 每次執行留下：agent.jsonl（結構化事件，給 compare-runs.py）、agent.stderr、final.md（最終回覆）、meta.json
 start=$(date +%s)
 set +e
 case "$harness" in
   pi)
-    (cd "$run" && timeout "$TIMEOUT" pi -p --mode json --no-session ${PI_THINKING:+--thinking "$PI_THINKING"} --model "harness-lab/$MAIN_ALIAS" "$prompt") \
+    (cd "$work" && timeout "$TIMEOUT" pi -p --mode json --no-session ${PI_THINKING:+--thinking "$PI_THINKING"} --model "harness-lab/$MAIN_ALIAS" "$prompt") \
       > "$run/agent.jsonl" 2> "$run/agent.stderr" ;;
   pi-router)
     # 需要 serve-router.sh，且在 Pi 互動模式跑過一次 /llama（模型清單才會存進 .home/pi）
-    (cd "$run" && timeout "$TIMEOUT" pi -p --mode json --no-session ${PI_THINKING:+--thinking "$PI_THINKING"} --model "llama.cpp/${MAIN_FILE%.gguf}" "$prompt") \
+    (cd "$work" && timeout "$TIMEOUT" pi -p --mode json --no-session ${PI_THINKING:+--thinking "$PI_THINKING"} --model "llama.cpp/${MAIN_FILE%.gguf}" "$prompt") \
       > "$run/agent.jsonl" 2> "$run/agent.stderr" ;;
   codex)
-    timeout "$TIMEOUT" codex exec --json -o "$run/final.md" -C "$run" --skip-git-repo-check -s workspace-write --ephemeral ${CODEX_MODEL:+-c "model=\"$CODEX_MODEL\""} "$prompt" \
+    timeout "$TIMEOUT" codex exec --json -o "$run/final.md" -C "$work" ${extra_dir:+--add-dir "$extra_dir"} --skip-git-repo-check -s workspace-write --ephemeral ${CODEX_MODEL:+-c "model=\"$CODEX_MODEL\""} "$prompt" \
       > "$run/agent.jsonl" 2> "$run/agent.stderr" ;;
   opencode)
     # OpenCode 以 git 根目錄當專案根目錄，不 git init 的話會是 harness-lab，實測模型因此跑去改了 evals/ 的原檔
-    git -C "$run" init -q
+    git -C "$work" init -q
     # 沒有沙箱；--auto 讓預設要詢問的權限自動通過（非互動時沒人能回答）；--thinking 才會把思考內容寫進 JSON
-    (cd "$run" && timeout "$TIMEOUT" opencode run --format json --auto --thinking -m "harness-lab/$MAIN_ALIAS" "$prompt") \
+    (cd "$work" && timeout "$TIMEOUT" opencode run --format json --auto --thinking -m "harness-lab/$MAIN_ALIAS" "$prompt") \
       > "$run/agent.jsonl" 2> "$run/agent.stderr" ;;
   qwen)
     # 沒有沙箱（-y 自動核准所有工具）；--chat-recording false 相當於 Pi 的 --no-session
-    (cd "$run" && QWEN_CODE_SUPPRESS_YOLO_WARNING=1 timeout "$TIMEOUT" qwen -o stream-json -y --chat-recording false -m "$MAIN_ALIAS" "$prompt") \
+    (cd "$work" && QWEN_CODE_SUPPRESS_YOLO_WARNING=1 timeout "$TIMEOUT" qwen -o stream-json -y --chat-recording false ${extra_dir:+--include-directories "$extra_dir"} -m "$MAIN_ALIAS" "$prompt") \
       > "$run/agent.jsonl" 2> "$run/agent.stderr" ;;
   *) echo "未知的 harness：$harness" >&2; exit 2 ;;
 esac
 agent_exit=$?
 set -e
+if [[ -n "$extra_dir" ]]; then
+  # 快照裡 output/ 以外的改動下次開跑前會被清掉，先存一份
+  changes="$(git -C "$work" status --porcelain --untracked-files=all)"
+  [[ -z "$changes" ]] || { echo "$changes"; git -C "$work" diff; } > "$run/snapshot.diff"
+fi
 secs=$(( $(date +%s) - start ))
 [[ -f "$run/final.md" ]] || python3 "$LAB_DIR/scripts/compare-runs.py" --final "$run" > "$run/final.md" || true
 
-if (cd "$run" && python3 -m unittest -q) > "$run/verify.log" 2>&1; then verdict=PASS; else verdict=FAIL; fi
-if [[ "$before" == "$(sha256sum "$run"/test_*.py)" ]]; then tests_ok=未改; else tests_ok=被改; verdict=FAIL; fi
-summary="$(tail -1 "$run/verify.log")"
-if [[ -n "$(evals_state)" ]]; then
+if [[ -z "$has_tests" ]]; then
+  verdict=人工 tests_ok=無 summary="沒有自動驗證"
+else
+  if (cd "$run" && python3 -m unittest -q) > "$run/verify.log" 2>&1; then verdict=PASS; else verdict=FAIL; fi
+  if [[ "$before" == "$(sha256sum "$run"/test_*.py)" ]]; then tests_ok=未改; else tests_ok=被改; verdict=FAIL; fi
+  summary="$(tail -1 "$run/verify.log")"
+fi
+state_after="$(lab_state)"
+if [[ "$watch" != . && -n "$state_after" ]]; then
   # agent 跑出 run 目錄改了題目原檔：run 目錄裡的結果不代表它解了題
   git -C "$LAB_DIR" diff -- "evals/$task" > "$run/escaped.diff"
   verdict=FAIL summary="改到 evals/$task 原檔（見 escaped.diff）"
   echo "警告：$harness 改到了 evals/$task 的原檔，請檢查後還原：git -C $LAB_DIR status evals/$task" >&2
+elif [[ "$watch" == . && "$state_after" != "$state_before" ]]; then
+  # 工作區本來就可能有改動，只比 git status 的變化（已經是改過的檔案再被改不會顯示）；也可能是你自己在這段時間改的
+  diff <(echo "$state_before") <(echo "$state_after") > "$run/escaped.diff" || true
+  summary="工作區有變化，可能是 agent 跑出 run 目錄（見 escaped.diff）"
+  echo "警告：執行期間 harness-lab 工作區的 git status 有變化，可能是 $harness 跑出 run 目錄：" >&2
+  cat "$run/escaped.diff" >&2
 fi
 label="$harness${PI_THINKING:+ (thinking=$PI_THINKING)}${CODEX_MODEL:+ (router)}"
 [[ "$MODEL" == qwen ]] || label="$label [$MAIN_ALIAS]"   # 預設模型不加，和舊紀錄的標籤一致
