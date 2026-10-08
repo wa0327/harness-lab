@@ -11,7 +11,7 @@ unset LLAMA_API_KEY   # 這是給 Pi 的；llama-server 也會讀同名變數當
 exec "$LLAMA_BIN/llama-server" \
   --models-dir "$MODELS_DIR" --models-max 1 \
   --host "$HOST" --port "$MAIN_PORT" \
-  ${API_KEY:+--api-key "$API_KEY"} \
+  --api-key "$API_KEY" \
   -ngl 999 --n-cpu-moe "$N_CPU_MOE" --fit off \
   -c "$CTX" -ctk "$KV_TYPE" -ctv "$KV_TYPE" -fa on \
   -b "$BATCH" -ub "$UBATCH" -lm "$LOAD_MODE" -t "$THREADS" \

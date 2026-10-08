@@ -6,8 +6,7 @@ set -euo pipefail
 source "$(dirname "$0")/../env.sh"
 
 CONFIG="$CODEX_HOME/config.toml"
-auth=()
-[[ -n "$API_KEY" ]] && auth=(-H "Authorization: Bearer $API_KEY")
+auth=(-H "Authorization: Bearer $API_KEY")
 
 echo "=== Codex Router 檢查 ==="
 echo ""

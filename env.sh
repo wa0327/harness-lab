@@ -55,12 +55,14 @@ export FIM_REPO="${FIM_REPO:-ggml-org/Qwen2.5-Coder-1.5B-Q8_0-GGUF}"
 export FIM_FILE="${FIM_FILE:-qwen2.5-coder-1.5b-q8_0.gguf}"
 
 # 伺服器
-# 預設只聽本機、不驗證。要開放給區網時，在 env.local.sh 同時設 HOST=0.0.0.0 和 API_KEY
+# 預設只聽本機。要開放給區網時，在 env.local.sh 同時設 HOST=0.0.0.0 和自己的 API_KEY
 export HOST="${HOST:-127.0.0.1}"
-export API_KEY="${API_KEY-}"   # 伺服器的 --api-key；空值 = 不驗證
-# 設了 API_KEY 時，.home 裡 Pi、Codex 的設定也要改成讀它（見 README「對外開放與 API key」）
-if [[ -z "$API_KEY" && "$HOST" != 127.0.0.1 && "$HOST" != localhost && "$HOST" != ::1 ]]; then
-  echo "env.sh 警告：HOST=$HOST 對外開放但沒有設 API_KEY，任何人都能使用這台的模型" >&2
+# 伺服器的 --api-key，各 harness 也都讀它。預設是公開的固定值，不是祕密：只為了讓 key 一定有值
+# （Pi、Codex、Qwen Code 讀到空字串會當成缺少憑證），設定就不用分「有 key／沒 key」兩種
+LAB_DEFAULT_API_KEY=harness-lab
+export API_KEY="${API_KEY:-$LAB_DEFAULT_API_KEY}"
+if [[ "$API_KEY" == "$LAB_DEFAULT_API_KEY" && "$HOST" != 127.0.0.1 && "$HOST" != localhost && "$HOST" != ::1 ]]; then
+  echo "env.sh 警告：HOST=$HOST 對外開放，但 API_KEY 還是公開的預設值 $LAB_DEFAULT_API_KEY，任何人都能使用這台的模型" >&2
 fi
 export MAIN_PORT="${MAIN_PORT:-8080}"
 export FIM_PORT="${FIM_PORT:-8012}"   # llama.vscode 預設連 8012
@@ -81,12 +83,14 @@ export HF_HOME="$LAB_DIR/.cache/huggingface"
 export LLAMA_CACHE="$LAB_DIR/.cache/llama.cpp"
 export npm_config_cache="$LAB_DIR/.cache/npm"
 export PI_CODING_AGENT_DIR="$LAB_DIR/.home/pi"
-# Pi 內建 llama.cpp provider（router 模式）在 /login 沒存 key 時讀這個；沒設的話 Pi 自己送佔位值
-if [[ -n "$API_KEY" ]]; then export LLAMA_API_KEY="$API_KEY"; else unset LLAMA_API_KEY; fi
+# Pi 內建 llama.cpp provider（router 模式）在 /login 沒存 key 時讀這個
+export LLAMA_API_KEY="$API_KEY"
 export CODEX_HOME="$LAB_DIR/.home/codex"
+export QWEN_HOME="$LAB_DIR/.home/qwen"
+# OpenCode 只認 XDG 目錄：bin/opencode 在執行時導向 .home/opencode，bin/ 排在 PATH 最前面以蓋過 node_modules/.bin
 
 case ":$PATH:" in
-  *":$LAB_DIR/.venv/bin:"*) ;;
-  *) export PATH="$LAB_DIR/.venv/bin:$LAB_DIR/node_modules/.bin:$LLAMA_BIN:$PATH" ;;
+  *":$LAB_DIR/bin:"*) ;;
+  *) export PATH="$LAB_DIR/bin:$LAB_DIR/.venv/bin:$LAB_DIR/node_modules/.bin:$LLAMA_BIN:$PATH" ;;
 esac
 export LD_LIBRARY_PATH="$LLAMA_BIN${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"

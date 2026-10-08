@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+# OpenCode 沒有 CODEX_HOME 那種單一設定目錄，設定、資料、快取都照 XDG 放。
+# 只在執行 OpenCode 時把 XDG 導向 .home/opencode，不在 env.sh 全域設（會讓 git 等工具讀不到 ~/.config 下的設定）。
+# env.sh 把 bin/ 排在 PATH 最前面，所以 source env.sh 之後的 opencode 都是這支
+set -euo pipefail
+lab="$(cd "$(dirname "$0")/.." && pwd)"
+home="$lab/.home/opencode"
+export XDG_CONFIG_HOME="$home/config" XDG_DATA_HOME="$home/data" XDG_CACHE_HOME="$home/cache" XDG_STATE_HOME="$home/state"
+export OPENCODE_DISABLE_AUTOUPDATE=1   # 版本由 package-lock.json 固定
+exec "$lab/node_modules/opencode-ai/bin/opencode.exe" "$@"

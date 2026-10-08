@@ -92,13 +92,66 @@ def parse_codex(events):
     return m
 
 
+def parse_opencode(events):
+    m = {"requests": 0, "prompt": 0, "cached": 0, "output": 0, "reasoning": None,
+         "thinking_chars": 0, "tools": Counter(), "tool_errors": 0, "final": ""}
+    for e in events:
+        part = e.get("part") or {}
+        if e.get("type") == "step_finish":
+            t = part.get("tokens") or {}
+            cache = t.get("cache") or {}
+            m["requests"] += 1
+            m["prompt"] += t.get("input", 0) + cache.get("read", 0) + cache.get("write", 0)
+            m["cached"] += cache.get("read", 0)
+            m["output"] += t.get("output", 0)
+        elif e.get("type") == "reasoning":
+            m["thinking_chars"] += len(part.get("text") or "")
+        elif e.get("type") == "text":
+            m["final"] = part.get("text") or m["final"]
+        elif e.get("type") == "tool_use":
+            state = part.get("state") or {}
+            m["tools"][part.get("tool", "?")] += 1
+            m["tool_errors"] += state.get("status") == "error" or (state.get("metadata") or {}).get("exit") not in (None, 0)
+    return m
+
+
+def parse_qwen(events):
+    m = {"requests": 0, "prompt": 0, "cached": 0, "output": 0, "reasoning": None,
+         "thinking_chars": 0, "tools": Counter(), "tool_errors": 0, "final": ""}
+    for e in events:
+        if e.get("type") == "assistant":
+            msg = e.get("message") or {}
+            u = msg.get("usage") or {}
+            # 思考和回應分成兩則 assistant 訊息送出，只有後者帶 usage
+            if u.get("input_tokens"):
+                m["requests"] += 1
+                m["prompt"] += u.get("input_tokens", 0)
+                m["cached"] += u.get("cache_read_input_tokens", 0)
+                m["output"] += u.get("output_tokens", 0)
+            for block in msg.get("content") or []:
+                if block.get("type") == "thinking":
+                    m["thinking_chars"] += len(block.get("thinking") or "")
+                elif block.get("type") == "tool_use":
+                    m["tools"][block.get("name", "?")] += 1
+        elif e.get("type") == "user":
+            for block in (e.get("message") or {}).get("content") or []:
+                if isinstance(block, dict) and block.get("type") == "tool_result":
+                    m["tool_errors"] += bool(block.get("is_error"))
+        elif e.get("type") == "result":
+            m["final"] = e.get("result") or m["final"]
+    return m
+
+
+PARSERS = {"codex": parse_codex, "opencode": parse_opencode, "qwen": parse_qwen}
+
+
 def load_run(run):
     run = Path(run).resolve()
     meta_path = run / "meta.json"
     meta = json.loads(meta_path.read_text()) if meta_path.exists() else {}
-    harness = meta.get("harness") or ("codex" if "-codex-" in run.name else "pi")
+    harness = meta.get("harness") or next((h for h in PARSERS if f"-{h}-" in run.name), "pi")
     events = load_events(run / "agent.jsonl")
-    parsed = parse_codex(events) if harness == "codex" else parse_pi(events)
+    parsed = PARSERS.get(harness, parse_pi)(events)
     if not events:
         parsed = None
     task = meta.get("task") or run.name.rsplit(f"-{harness}-", 1)[0]
@@ -140,7 +193,8 @@ def table_rows(runs):
 
 
 NOTES = [
-    "送出 prompt 總量：Pi = input + cacheRead；Codex = turn.completed 的 input_tokens（已含快取）。",
+    "送出 prompt 總量：Pi = input + cacheRead；OpenCode = input + cache.read + cache.write；"
+    "Codex、Qwen Code = input_tokens（已含快取）。",
     "模型回應次數：Codex 不回報，以它每次回應前說的話（agent_message）估算，標 ≈。",
     "思考：llama.cpp 不回報思考 token 數；Codex 經 Responses API 拿不到思考內容，所以顯示 —。",
     "結束碼非 0：多半是第一次跑測試時測試失敗，題目本來就有 bug，屬預期。",
@@ -241,6 +295,8 @@ def latest_runs(task):
         if not (d / "meta.json").exists() or not (d / "agent.jsonl").exists():
             continue
         r = load_run(d)
+        if r["meta"].get("verdict") == "INVALID":   # 事後人工標記為無效的（例如題目原檔被污染）
+            continue
         best[r["label"]] = r
     return list(best.values())
 

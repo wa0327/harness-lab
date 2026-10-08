@@ -1,0 +1,39 @@
+// Qwen Code 專用設定（QWEN_HOME 指向專案內 .home/qwen，不影響 ~/.qwen），接 scripts/serve-main.sh 起的 llama-server
+{
+  "security": {
+    "auth": {
+      "selectedType": "openai"
+    }
+  },
+  // 各模型的 envKey 指定從哪個環境變數讀 key（讀到空值會報錯不送請求，env.sh 保證 API_KEY 有值）
+  "model": { "name": "qwen3.6-35b-a3b" },
+  "modelProviders": {
+    "openai": [
+      {
+        "id": "qwen3.6-35b-a3b",
+        "name": "Qwen3.6-35B-A3B (llama.cpp)",
+        "baseUrl": "http://127.0.0.1:8080/v1",
+        "envKey": "API_KEY",
+        "generationConfig": {
+          "contextWindowSize": 65536,
+          "samplingParams": { "temperature": 1.0, "top_p": 0.95, "top_k": 20, "max_tokens": 16384 }
+        }
+      },
+      {
+        "id": "glm-4.7-flash",
+        "name": "GLM-4.7-Flash (llama.cpp)",
+        "baseUrl": "http://127.0.0.1:8080/v1",
+        "envKey": "API_KEY",
+        "generationConfig": {
+          "contextWindowSize": 65536,
+          "samplingParams": { "temperature": 0.7, "top_p": 1.0, "max_tokens": 16384 }
+        }
+      }
+    ]
+  },
+  // 背景另外打模型請求的功能：在本機單一伺服器上會和主任務搶資源，也會讓前後幾次測試互相影響
+  "memory": { "enableManagedAutoMemory": false, "enableManagedAutoDream": false },
+  "experimental": { "emitToolUseSummaries": false },
+  "privacy": { "usageStatisticsEnabled": false },
+  "general": { "enableAutoUpdate": false }
+}

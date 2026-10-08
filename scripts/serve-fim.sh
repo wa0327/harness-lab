@@ -9,7 +9,7 @@ unset LLAMA_API_KEY   # 這是給 Pi 的；llama-server 也會讀同名變數當
 exec "$LLAMA_BIN/llama-server" \
   -m "$MODELS_DIR/$FIM_FILE" \
   --host "$HOST" --port "$FIM_PORT" \
-  ${API_KEY:+--api-key "$API_KEY"} \
+  --api-key "$API_KEY" \
   -ngl 99 -fa on -ub "$FIM_BATCH" -b "$FIM_BATCH" \
   -c "$FIM_CTX" --cache-reuse 256 \
   "$@"

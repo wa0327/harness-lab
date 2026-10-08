@@ -1,9 +1,11 @@
 {
   "name": "harness-lab",
   "private": true,
-  "description": "本地 LLM + agent harness 的工具安裝清單（npm install --ignore-scripts）",
+  "description": "本地 LLM + agent harness 的工具安裝清單（npm install --ignore-scripts；opencode-ai 另需 postinstall，見 setup-tools.sh）",
   "devDependencies": {
     "@earendil-works/pi-coding-agent": "latest",
-    "@openai/codex": "latest"
+    "@openai/codex": "latest",
+    "@qwen-code/qwen-code": "latest",
+    "opencode-ai": "latest"
   }
 }

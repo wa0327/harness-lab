@@ -58,12 +58,34 @@
 - **關掉思考最快**，只要 66 秒，但寫出的程式比較冗長：用 float 計算，額外接受了規格沒提到的 `+` 號。日常小改動可以用 `--thinking off` 或 `low`，難題再開 medium。
 - **首回合 prompt**：Pi 約 1.65k token（實測 3.4 秒），Codex 約 6.7k token（實測 8.3 秒）。差距約 5 秒，在這台機器上影響不大。
 
+### 加入 OpenCode 與 Qwen Code（2026-10-08）
+
+版本：OpenCode 1.18.35、Qwen Code 0.25.0（同時 Pi 升到 1.1.0、Codex 升到 0.161.0）。主模型 Qwen3.6-35B-A3B，各 harness 都用預設思考。
+
+| harness | 首回合 prompt | 預設工具數 | fix-inventory | implement-duration |
+|---|---|---|---|---|
+| Pi | 約 1.65k | 4 | 33s，送出 14k tok | 189s（前一天） |
+| Codex | 約 6.7k | — | 34s，送出 40k tok | 105s（前一天） |
+| OpenCode | 約 10.9k | — | 59s，送出 63k tok | 628s，生成 19.8k tok |
+| Qwen Code | 約 15–16k | 30 | 54s，送出 123k tok | 483s，生成 11.0k tok |
+
+觀察：
+
+- **全部 PASS**，fix-inventory 四者改出的程式完全相同。
+- **prompt 越大、每回合重送的量越大**，但快取命中都在 90% 以上，所以 fix-inventory 的時間差距不大。
+- implement-duration 的時間主要由**思考量**決定：OpenCode 單一回合就生成 8k token（約 4 分鐘）。每種組合只跑一次，波動很大，還不能比較快慢。
+- OpenCode 的調研數字（首回合約 7k）比實測少，可能是版本不同。
+
 ## 4. 踩到的坑
 
 - 這版 llama.cpp 移除了 `--no-mmap`，改用 `-lm/--load-mode`。llama-bench 的 `-mmp` 也一樣被移除，`-fa` 改成吃 `on|off|auto`。
 - `huggingface_hub` 2.x 沒有 `[cli]` extra 了，`hf` 指令直接內建在主套件裡。
 - **Pi 的 router 整合需要先互動一次**：只設 `LLAMA_BASE_URL` 環境變數，`-p` 模式找不到 router 上的模型（Pi 1.0.4）。要先在互動模式執行 `/login llama.cpp` 和 `/llama`，模型清單才會存進 `.home/pi/models-store.json`，之後 `-p` 才能用。我已經在專案內的 `auth.json` 寫入 llama.cpp 憑證，並執行過一次 `/llama`。
-- Pi 第一次啟動會自動下載 ripgrep，放在 `.home/pi/bin/`，仍在專案內。
+- Pi 第一次啟動會自動下載 ripgrep，放在 `.home/pi/bin/`，仍在專案內。OpenCode 也一樣（`.home/opencode/cache/opencode/bin/`），第一次測試因此多花 82 秒。
+- **OpenCode 跑出 run 目錄改了題目原檔**：run 目錄在 harness-lab 的 git repo 裡，OpenCode 以 git 根目錄當專案根目錄，模型去讀 `/home/jack/repos/harness-lab/SPEC.md`，找不到後用 glob 找到 `evals/implement-duration/`，就直接在原檔上實作。接著跑的 Qwen Code 複製到已解好的檔案，一開始就 PASS。兩次結果都已標為 INVALID，原檔已還原。修正：OpenCode 的 run 目錄先 `git init`；`agent-test.sh` 開始前檢查 `evals/<題目>` 是否乾淨，結束後再檢查一次。
+- **opencode-ai 的 npm 套件需要 postinstall** 把平台執行檔連到 `bin/`，`--ignore-scripts` 時要手動跑；它驗證時會執行一次 `opencode --version`，沒先設 XDG 就會在家目錄建目錄。`setup-tools.sh` 已處理。
+- **Qwen Code 預設會在背景另外打模型請求**（自動 memory 擷取、工具摘要），同一題 `result.usage` 比各回合加總多約 6k token、時間多 14 秒。範本已關掉。
+- **Qwen Code 的 `envKey` 讀到空值會直接報錯**，不送請求，和 Codex 的 `env_key` 一樣（Pi 的自訂 provider 也不會把模型標為可用）。為了不讓設定分成「有 key／沒 key」兩種，`env.sh` 改成給 `API_KEY` 一個公開的預設值 `harness-lab`，伺服器一律驗證，各 harness 都直接讀 `API_KEY`。
 
 ## 5. 還沒測
 
