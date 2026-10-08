@@ -3,6 +3,7 @@
 # 端點：OpenAI /v1/chat/completions、/v1/responses，Anthropic /v1/messages
 set -euo pipefail
 source "$(dirname "$0")/../env.sh"
+unset LLAMA_API_KEY   # 這是給 Pi 的；llama-server 也會讀同名變數當自己的 key，伺服器的 key 一律由 --api-key 傳入
 
 exec "$LLAMA_BIN/llama-server" \
   -m "$MODELS_DIR/$MAIN_FILE" --alias "$MAIN_ALIAS" \

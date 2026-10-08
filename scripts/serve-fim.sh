@@ -4,6 +4,7 @@
 # 會和主模型分享 VRAM：同時開的話，主模型的 N_CPU_MOE 可能要調高
 set -euo pipefail
 source "$(dirname "$0")/../env.sh"
+unset LLAMA_API_KEY   # 這是給 Pi 的；llama-server 也會讀同名變數當自己的 key，伺服器的 key 一律由 --api-key 傳入
 
 exec "$LLAMA_BIN/llama-server" \
   -m "$MODELS_DIR/$FIM_FILE" \

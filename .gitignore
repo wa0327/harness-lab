@@ -11,3 +11,6 @@ logs/
 
 # Python 快取
 __pycache__/
+
+# 每台機器自己的設定（範本是 env.local.sh.example）
+env.local.sh

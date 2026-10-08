@@ -9,4 +9,6 @@ model_context_window = 65536
 name = "llama.cpp (harness-lab)"
 base_url = "http://127.0.0.1:8080/v1"
 wire_api = "responses"
-env_key = "API_KEY"   # env.sh 匯出；Codex 不認 api_key 欄位
+# 預設伺服器只聽本機、不驗證，所以不送 key。伺服器有設 API_KEY（對外開放）時取消下一行的註解
+# （Codex 不認 api_key 欄位，只能用 env_key 指定從哪個環境變數讀）
+# env_key = "API_KEY"
