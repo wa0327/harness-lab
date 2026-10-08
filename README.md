@@ -70,10 +70,10 @@ scripts/serve-fim.sh                           # 終端機 2（選用）：Tab �
 
 source env.sh                                  # 終端機 3
 curl -s -H "Authorization: Bearer $API_KEY" http://127.0.0.1:8080/v1/models
-scripts/agent-test.sh pi
-scripts/agent-test.sh codex
-scripts/agent-test.sh opencode                 # 第一次會下載 ripgrep 到 .home/opencode，多花約 1 分半
-scripts/agent-test.sh qwen
+scripts/agent-test.sh fix-inventory pi
+scripts/agent-test.sh fix-inventory codex
+scripts/agent-test.sh fix-inventory opencode   # 第一次會下載 ripgrep 到 .home/opencode，多花約 1 分半
+scripts/agent-test.sh fix-inventory qwen
 scripts/compare-runs.py --latest fix-inventory
 ```
 
@@ -162,7 +162,7 @@ pi --model harness-lab/qwen3.6-35b-a3b --thinking off
 MODEL=glm scripts/get-models.sh main
 MODEL=glm scripts/serve-main.sh
 MODEL=glm pi --model harness-lab/glm-4.7-flash
-MODEL=glm scripts/agent-test.sh pi       # 紀錄的標籤會加上 [glm-4.7-flash]
+MODEL=glm scripts/agent-test.sh fix-inventory pi   # 紀錄的標籤會加上 [glm-4.7-flash]
 ```
 
 整個終端機都要換的話，用 `. env.sh glm`（換回來是 `. env.sh qwen`），之後執行的腳本、`pi`、`codex` 都會跟著用。注意不要打成 `MODEL=glm . env.sh`：bash 會在 source 結束後把 `MODEL` 還原，之後的腳本又會回到 qwen。新增模型時，在 `env.sh` 的 `case` 加一段（`N_CPU_MOE` 照現有寫法讀 `N_CPU_MOE_<名稱>`，讓各機器能在 `env.local.sh` 覆寫），並在 `configs/pi/models.json` 加上取樣參數。
@@ -243,7 +243,7 @@ MODEL=glm scripts/agent-test.sh pi       # 紀錄的標籤會加上 [glm-4.7-fla
 | `scripts/serve-router.sh` | Pi 官方建議的 router 模式（Pi 裡 `/login llama.cpp`、`/llama`、`/model`）。收到請求時自動載入模型，同時最多一個（`--models-max 1`），請求別的模型會把目前的卸載。已驗證 MoE 等參數會傳給 router 載入的模型；模型名稱是檔名 |
 | `scripts/serve-fim.sh` | Tab 補全伺服器，port 8012，給 llama.vscode / Continue。context 8K、batch 512 時可以和主模型同時跑（合計 VRAM 7.7GB） |
 | `scripts/bench-moe.sh` | `llama-bench` 掃描 `--n-cpu-moe`，結果寫到 `logs/bench/` |
-| `scripts/agent-test.sh` | 用 `evals/` 裡的同一題測不同 harness（`pi`、`pi-router`、`codex`、`opencode`、`qwen`），自動驗證並記錄到 `logs/agent-runs.md`，每次的工作目錄與事件紀錄在 `logs/runs/`。`PI_THINKING=off` 可以調 Pi 的思考強度。題目目錄有 `SNAPSHOT`（commit）時（如 `review-readme`），agent 改在 harness-lab 那個 commit 的快照裡工作：快照每個 commit 只拉一次，存在 `.cache/snapshots/`，開跑前一律 reset + clean 回到乾淨狀態，產出寫到快照裡的 `output/`（符號連結到 run 目錄的 `output/`），其他改動存成 run 目錄的 `snapshot.diff`。沒有 `test_*.py` 的題目不自動驗證，結果記為「人工」。其他題目從 `evals/<題目>` 複製，開始前會檢查它是否乾淨，結束後若發現 agent 改到原檔就判 FAIL |
+| `scripts/agent-test.sh` | `scripts/agent-test.sh <題目> <harness>`：用 `evals/` 裡的同一題測不同 harness（`pi`、`pi-router`、`codex`、`opencode`、`qwen`），自動驗證並記錄到 `logs/agent-runs.md`，每次的工作目錄與事件紀錄在 `logs/runs/`。`PI_THINKING=off` 可以調 Pi 的思考強度。題目目錄有 `SNAPSHOT`（commit）時（如 `review-readme`），agent 改在 harness-lab 那個 commit 的快照裡工作：快照每個 commit 只拉一次，存在 `.cache/snapshots/`，開跑前一律 reset + clean 回到乾淨狀態，產出寫到快照裡的 `output/`（符號連結到 run 目錄的 `output/`），其他改動存成 run 目錄的 `snapshot.diff`。沒有 `test_*.py` 的題目不自動驗證，結果記為「人工」。其他題目從 `evals/<題目>` 複製，開始前會檢查它是否乾淨，結束後若發現 agent 改到原檔就判 FAIL |
 | `bin/opencode` | OpenCode 的包裝腳本，把 XDG 目錄導向 `.home/opencode/` |
 | `scripts/compare-runs.py` | 比較多次執行的 token、回合數、工具呼叫、程式差異與最終回覆。`--latest fix-inventory` 取每種 harness 最新一次；`--md` 輸出 Markdown |
 | `scripts/setup-tools.sh`、`install-llama.sh`、`get-models.sh` | 安裝工具、llama.cpp 與模型，全部放在專案內。`setup-tools.sh` 會先檢查前置需求 |

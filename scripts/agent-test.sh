@@ -1,13 +1,14 @@
 #!/usr/bin/env bash
 # 用同一個題目測不同 harness：複製 evals/<題目> 到 logs/runs/，讓 harness 非互動解題，再自動驗證
-# 用法：scripts/agent-test.sh <pi|pi-router|codex|opencode|qwen> [題目]   需要先啟動 scripts/serve-main.sh
+# 用法：scripts/agent-test.sh <題目> <pi|pi-router|codex|opencode|qwen>   需要先啟動 scripts/serve-main.sh
 set -euo pipefail
 source "$(dirname "$0")/../env.sh"
 
-harness="${1:?用法：scripts/agent-test.sh <pi|pi-router|codex|opencode|qwen> [題目]}"
-task="${2:-fix-inventory}"
+usage="用法：scripts/agent-test.sh <題目> <pi|pi-router|codex|opencode|qwen>，題目是 evals/ 下的目錄名稱"
+task="${1:?$usage}"
+harness="${2:?$usage}"
 TIMEOUT="${TIMEOUT:-1800}"
-PI_THINKING="${PI_THINKING:-}"   # 例：PI_THINKING=off scripts/agent-test.sh pi
+PI_THINKING="${PI_THINKING:-}"   # 例：PI_THINKING=off scripts/agent-test.sh fix-inventory pi
 CODEX_MODEL="${CODEX_MODEL:-}"   # 例：接 router 時 CODEX_MODEL=Qwen3.6-35B-A3B-UD-Q4_K_XL
 
 task_dir="$LAB_DIR/evals/$task"
