@@ -97,8 +97,10 @@ case "$harness" in
   opencode)
     # OpenCode 以 git 根目錄當專案根目錄，不 git init 的話會是 harness-lab，實測模型因此跑去改了 evals/ 的原檔
     git -C "$work" init -q
-    # 沒有沙箱；--auto 讓預設要詢問的權限自動通過（非互動時沒人能回答）；--thinking 才會把思考內容寫進 JSON
-    (cd "$work" && timeout "$TIMEOUT" opencode run --format json --auto --thinking -m "$MAIN_PROVIDER/$MAIN_ALIAS" "$prompt") \
+    # 沒有沙箱；--auto 讓預設要詢問的權限自動通過（非互動時沒人能回答）；--thinking 才會把思考內容寫進 JSON。
+    # OPENCODE_DISABLE_CLAUDE_CODE：不讀 Claude Code 的設定。否則它會把家目錄 ~/.claude/skills/ 的 skills
+    # 全列進系統提示（實測 13 個、約 12K 字元），那些不是 OpenCode 自己的，換台機器就沒有
+    (cd "$work" && OPENCODE_DISABLE_CLAUDE_CODE=1 timeout "$TIMEOUT" opencode run --format json --auto --thinking -m "$MAIN_PROVIDER/$MAIN_ALIAS" "$prompt") \
       > "$run/agent.jsonl" 2> "$run/agent.stderr" ;;
   qwen)
     # 沒有沙箱（-y 自動核准所有工具）；--chat-recording false 相當於 Pi 的 --no-session
