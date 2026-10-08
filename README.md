@@ -300,7 +300,7 @@ MODEL=ds4 scripts/agent-test.sh review-readme pi   # 紀錄的標籤會加上 [d
 
 ### 評測題目（`evals/`）
 
-目前有 `fix-inventory`、`implement-duration`（較難）、`review-readme`、`cwd-probe` 四題。`cwd-probe` 不考能力，是檢查隔離：請 agent 列出工作目錄、照抄環境資訊裡的路徑，用來確認 harness 有沒有把快照以外的東西帶進 context。新增題目時，在 `evals/<名稱>/` 放：
+目前有 `hi`、`fix-inventory`、`implement-duration`（較難）、`review-readme`、`cwd-probe` 五題。`hi` 是冒煙測試：只要回答 hi，幾秒就跑完，用來確認 harness、伺服器、模型整條路都通，例如 `scripts/agent-test.sh hi opencode`。`cwd-probe` 不考能力，是檢查隔離：請 agent 列出工作目錄、照抄環境資訊裡的路徑，用來確認 harness 有沒有把快照以外的東西帶進 context。新增題目時，在 `evals/<名稱>/` 放：
 
 - `PROMPT.md`：送給 agent 的題目，必要。
 - `test_*.py`：有的話就用 `python3 -m unittest -q` 自動驗證，執行前後比對測試檔的 sha256，被 agent 改過就判 FAIL。沒有的話結果記為「人工」。
