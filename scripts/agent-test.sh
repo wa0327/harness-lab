@@ -1,13 +1,15 @@
 #!/usr/bin/env bash
 # 用同一個題目測不同 harness：複製 evals/<題目> 到 logs/runs/<題目>/<harness>/<日期_時間>/，讓 harness 非互動解題，再自動驗證
-# 用法：scripts/agent-test.sh <題目> <pi|pi-router|codex|opencode|qwen|claude>   需要先啟動 scripts/serve-main.sh（claude 除外）
+# 用法：scripts/agent-test.sh [--monitor] <題目> <pi|pi-router|codex|opencode|qwen|claude>   需要先啟動 scripts/serve-main.sh（claude 除外）
+# --monitor：執行期間即時顯示 agent 的思考、回覆、工具呼叫與結果（scripts/watch-agent.py）
 set -euo pipefail
 source "$(dirname "$0")/../env.sh"
 
-usage="用法：scripts/agent-test.sh <題目> <pi|pi-router|codex|opencode|qwen|claude>，題目是 evals/ 下的目錄名稱"
-task="${1:?$usage}"
-harness="${2:?$usage}"
-TIMEOUT="${TIMEOUT:-1800}"
+usage="用法：scripts/agent-test.sh [--monitor] <題目> <pi|pi-router|codex|opencode|qwen|claude>，題目是 evals/ 下的目錄名稱"
+monitor=""; args=()
+for a in "$@"; do [[ "$a" == --monitor ]] && monitor=1 || args+=("$a"); done
+task="${args[0]:?$usage}"
+harness="${args[1]:?$usage}"
 PI_THINKING="${PI_THINKING:-}"   # 例：PI_THINKING=off scripts/agent-test.sh fix-inventory pi
 CODEX_MODEL="${CODEX_MODEL:-}"   # 例：接 router 時 CODEX_MODEL=Qwen3.6-35B-A3B-UD-Q4_K_XL
 CLAUDE_MODEL=claude-opus-5-5     # claude 是上限標竿：固定用 Anthropic 的雲端模型，不走本地伺服器，不受 MODEL 影響
@@ -18,6 +20,9 @@ SNAPSHOT_DIR=/tmp/agent-snapshots
 
 task_dir="$LAB_DIR/evals/$task"
 [[ -d "$task_dir" ]] || { echo "沒有這個題目：evals/$task" >&2; exit 2; }
+case "$harness" in pi|pi-router|codex|opencode|qwen|claude) ;; *) echo "未知的 harness：$harness" >&2; exit 2 ;; esac
+# 限時（秒）：命令列的 TIMEOUT 優先，其次是題目目錄的 TIMEOUT 檔，都沒有就 1800。時間到就結束 harness，照常評分
+TIMEOUT="${TIMEOUT:-$(cat "$task_dir/TIMEOUT" 2>/dev/null || echo 1800)}"
 
 # 開跑前確認模型伺服器連得到（本機模型要先跑 serve-main.sh；ds4 是按需開機的遠端主機），免得白跑一輪
 if [[ "$harness" != claude ]]; then
@@ -31,10 +36,24 @@ fi
 # 結束時比對，被改過就判 FAIL。不要求原檔已提交，正在寫的新題目也能直接跑。
 # SNAPSHOT 題目的內容來自指定的 commit，不從 evals/ 複製，不比對（跑出去新增檔案的情況由結束時的 lab_untracked 抓）
 snapshot=""; [[ -f "$task_dir/SNAPSHOT" ]] && snapshot=1
+# ISOLATE 題目：agent 在 /tmp 的工作目錄作答，題目檔（模擬器、測試…）複製進去並設成唯讀。跑完把工作目錄複製到
+# run 目錄的 output/，再用原檔蓋回題目檔、在那裡跑測試：agent 改了自己那份也影響不到成績，改了照樣判 FAIL。
+# 不在 run 目錄作答，是因為 agent 會從路徑推到 harness-lab，看到 logs/runs/ 底下別的 harness 交的答案
+# ACCEPT 題目（內容是驗收次數上限）：同樣在 /tmp 作答，但看不到題目檔，只能用 ./accept 送出驗收
+# （評分由本腳本做）；次數用完就結束 harness，成績照交卷內容算
+isolate=""; [[ -f "$task_dir/ISOLATE" ]] && isolate=1
+accept_max=""; [[ -f "$task_dir/ACCEPT" ]] && accept_max="$(cat "$task_dir/ACCEPT")" isolate=1
+# 題目檔：評分時一律用原檔蓋回去的那些（PROMPT.md 與標記檔以外的檔案）
+task_files=(); while IFS= read -r f; do task_files+=("$f"); done < <(
+  cd "$task_dir" && find . -type f ! -name PROMPT.md ! -name ISOLATE ! -name ACCEPT ! -name SNAPSHOT ! -name TIMEOUT -printf '%P\n' | LC_ALL=C sort)
 # harness-lab 裡沒被 .gitignore 排除的未追蹤檔案（logs/、.cache/ 不算），開始和結束時比對，抓 agent 用絕對路徑寫到外面
 lab_untracked() { git -C "$LAB_DIR" ls-files --others --exclude-standard | LC_ALL=C sort; }
+tmp_dirs=()   # 本次用到的 /tmp 目錄，結束時（包括中途出錯、被中斷）一律刪掉
+# 不管怎麼結束（出錯、被 kill、終端機關掉）都先收掉 harness：實測主程序意外結束時，背景的 harness 會繼續跑、
+# 一直佔著模型伺服器推理
+trap 'declare -F stop_harness > /dev/null && stop_harness; rm -rf "${tmp_dirs[@]}"' EXIT
 if [[ -z "$snapshot" ]]; then
-  task_orig="$(mktemp -d)"
+  task_orig="$(mktemp -d)"; tmp_dirs+=("$task_orig")
   cp -a "$task_dir/." "$task_orig/"
 fi
 
@@ -70,14 +89,76 @@ if [[ -n "$snapshot" ]]; then
 else
   cp -a "$task_dir/." "$run/"
 fi
+if [[ -n "$isolate" ]]; then
+  work="$(mktemp -d /tmp/agent-work.XXXXXX)"
+  # 暫時保留不刪（debug 用），路徑記在 run 目錄的 tmp-dirs.txt
+  echo "$work" > "$run/tmp-dirs.txt"
+  if [[ -z "$accept_max" ]]; then
+    for f in "${task_files[@]}"; do mkdir -p "$work/$(dirname "$f")" && cp -a "$task_dir/$f" "$work/$f" && chmod a-w "$work/$f"; done
+  fi
+fi
+# 把工作目錄的作答複製到 $1，再用原檔蓋回題目檔（評分一律用原檔）
+submission() {
+  rm -rf "$1" && mkdir -p "$1" && cp -a "$work/." "$1/" && rm -rf "$1/accept" "$1/.git"
+  find "$1" -name __pycache__ -type d -prune -exec rm -rf {} +
+  local f; for f in "${task_files[@]}"; do mkdir -p "$1/$(dirname "$f")"; rm -f "$1/$f"; cp "$task_orig/$f" "$1/$f"; done
+}
+if [[ -n "$accept_max" ]]; then
+  # 題目檔不放進工作目錄，./accept 裡也不寫評分檔的路徑：實測 Pi 會照 ./accept 裡的路徑去讀模擬器，
+  # 題目寫了不准也照讀。./accept 只在佇列目錄放一張請求單，由 agent-test.sh 本身（在 agent 的程序之外）
+  # 評分、寫回結果，次數也由這邊算，agent 改不了。佇列在 /tmp：Codex 的 workspace-write 沙箱只能寫工作目錄和 /tmp
+  queue="$(mktemp -d /tmp/agent-accept.XXXXXX)"
+  echo "$queue" >> "$run/tmp-dirs.txt"
+  mkdir "$run/accept"
+  n_accept=0 exam_over=""
+  cat > "$work/accept" <<EOF
+#!/usr/bin/env bash
+# 驗收：送出目前工作目錄的內容評分，最多 $accept_max 次，最後一次跑完考試結束
+q=$queue
+id=\$\$-\$RANDOM
+: > "\$q/req-\$id"
+for _ in \$(seq 1800); do   # 最多等 15 分鐘
+  [[ -e "\$q/resp-\$id" ]] && { cat "\$q/resp-\$id"; exit 0; }
+  sleep 0.5
+done
+echo "等不到評分結果" >&2; exit 1
+EOF
+  chmod +x "$work/accept"
+  accept_sha="$(sha256sum < "$work/accept")"
+fi
+# 處理一張驗收請求：作答存成 run 目錄的 accept/<次>/ 並在那裡跑測試，output/ 也換成這一份，結果寫回佇列。
+# 輸出裡的 run 目錄路徑先去掉，不讓 agent 知道評分檔在哪
+grade_request() {
+  local id="${1##*/req-}" msg log sub
+  rm -f "$1"
+  if (( n_accept >= accept_max )); then
+    msg="驗收次數已用完（共 $accept_max 次），考試已結束"
+  else
+    n_accept=$(( n_accept + 1 ))
+    sub="$run/accept/$n_accept" log="$run/accept/accept-$n_accept.log"
+    submission "$sub"
+    rm -rf "$run/output" && cp -a "$sub" "$run/output"
+    (cd "$sub" && python3 -m unittest -q) 2>&1 | sed "s#$sub/##g; s#$run/##g" > "$log"
+    msg="$(cat "$log")"
+    if (( n_accept < accept_max )); then
+      msg+=$'\n'"第 $n_accept 次驗收（共 $accept_max 次），還剩 $(( accept_max - n_accept )) 次"
+    else
+      msg+=$'\n'"第 $n_accept 次驗收（共 $accept_max 次）：驗收次數用完，考試結束"
+      exam_over=1
+    fi
+  fi
+  printf '%s\n' "$msg" > "$queue/resp-$id.tmp" && mv "$queue/resp-$id.tmp" "$queue/resp-$id"
+}
 prompt="$(cat "$task_dir/PROMPT.md")"
+# 題目有 TIMEOUT 檔時把限時告訴 agent，讓它分配時間（沒有的題目維持原本的題目，和舊紀錄可比）
+[[ ! -f "$task_dir/TIMEOUT" ]] || prompt+=$'\n\n'"本題限時 $(( TIMEOUT / 60 )) 分鐘，時間到會直接結束，以當時工作目錄的內容評分。收尾工作（例如寫說明文件）請預留時間。"
 has_tests=$(compgen -G "$run/test_*.py" > /dev/null && echo 1 || true)   # 沒有標準答案的題目不放測試，結果由人工判斷
 before="$([[ -z "$has_tests" ]] || sha256sum "$run"/test_*.py)"
 
 # 每次執行留下：agent.jsonl（結構化事件，給 compare-runs.py）、agent.stderr、final.md（最終回覆）、meta.json
 untracked_before="$(lab_untracked)"
 start=$(date +%s)
-set +e
+run_harness() {
 case "$harness" in
   pi)
     (cd "$work" && timeout "$TIMEOUT" pi -p --mode json --no-session ${PI_THINKING:+--thinking "$PI_THINKING"} --model "$MAIN_PROVIDER/$MAIN_ALIAS" "$prompt") \
@@ -109,9 +190,49 @@ case "$harness" in
     (cd "$work" && timeout "$TIMEOUT" claude -p --output-format stream-json --verbose --model "$CLAUDE_MODEL" \
         --permission-mode bypassPermissions --no-session-persistence --strict-mcp-config "$prompt" < /dev/null) \
       > "$run/agent.jsonl" 2> "$run/agent.stderr" ;;
-  *) echo "未知的 harness：$harness" >&2; exit 2 ;;
-esac 9>&-   # 不讓 harness 繼承快照鎖：鎖跟著 fd 走，背景子程序沒結束的話，下一個 run 會拿不到
-agent_exit=$?
+esac
+}
+# 本次 run 的 timeout 程序：用環境變數裡的隨機標記認，不沿父子關係找——被 kill 整個程序群組時，
+# 中間的子 shell 會先死，timeout 改掛到 init 底下，沿父子關係就找不到了（實測 harness 因此沒被結束）
+export AGENT_TEST_ID="$(od -An -N8 -tx1 /dev/urandom | tr -d ' \n')"
+harness_pids() {
+  local p
+  for p in $(pgrep -x timeout); do
+    tr '\0' '\n' < "/proc/$p/environ" 2>/dev/null | grep -qxF "AGENT_TEST_ID=$AGENT_TEST_ID" && echo "$p"
+  done
+  return 0
+}
+# 對 timeout 送 TERM，由它轉送給執行中的 harness
+stop_harness() { local p; for p in $(harness_pids); do kill -TERM "$p" 2>/dev/null; done; return 0; }
+set +e
+# 一律放背景跑再等它：harness 在 timeout 自己的程序群組裡，收不到終端機的 Ctrl+C，而前景執行時 bash 要等
+# harness 結束才處理訊號——實測按 Ctrl+C 要等 harness 自己跑完。現在由 trap 結束 harness，再照常收尾、記錄。
+# 0<&0：背景工作預設 stdin 是 /dev/null，維持和前景一樣。
+# 9>&-：不讓 harness 繼承快照鎖：鎖跟著 fd 走，背景子程序沒結束的話，下一個 run 會拿不到
+run_harness 0<&0 9>&- &
+hpid=$!
+# --monitor：harness 結束後，監看讀完剩下的事件就自己停
+[[ -z "$monitor" ]] || { python3 -I "$LAB_DIR/scripts/watch-agent.py" --pid "$hpid" "$run" 9>&- & wpid=$!; }
+interrupted=""
+trap 'interrupted=1; stop_harness' INT TERM HUP
+while kill -0 "$hpid" 2>/dev/null; do
+  if [[ -n "$accept_max" ]]; then
+    # ACCEPT 題目：處理驗收請求；最後一次驗收完就結束 harness
+    for req in "$queue"/req-*; do [[ -e "$req" ]] && grade_request "$req"; done
+    if [[ -n "$exam_over" ]]; then
+      sleep 3   # 讓 harness 先收到、記下最後一次驗收的輸出
+      stop_harness
+      break
+    fi
+  fi
+  sleep 1
+done
+# wait 被訊號打斷時會提早回來，harness 還沒結束就再等
+while :; do wait "$hpid"; agent_exit=$?; kill -0 "$hpid" 2>/dev/null || break; done
+# 子 shell 被訊號殺掉時 timeout 可能還在跑：等它把 harness 收掉，最多 15 秒
+for _ in {1..15}; do [[ -n "$(harness_pids)" ]] || break; stop_harness; sleep 1; done
+trap - INT TERM HUP
+[[ -z "$monitor" ]] || wait "$wpid"
 set -e
 # 子 agent 的紀錄不在 agent.jsonl 裡，從各 harness 的存放位置複製到 run 目錄的 subagents/
 python3 -I "$LAB_DIR/scripts/collect-subagents.py" "$harness" "$run" "$work" "$start" || true
@@ -121,16 +242,42 @@ if [[ -n "$snapshot" ]]; then
   changes="$(git -C "$work" status --porcelain --untracked-files=all)"
   [[ -z "$changes" ]] || { echo "$changes"; git -C "$work" diff; } > "$run/snapshot.diff"
 fi
+vdir="$run"   # 跑驗證的目錄
+if [[ -n "$isolate" ]]; then
+  # 交卷內容放在 output/（題目檔已用原檔蓋回），驗證就在那裡跑。ACCEPT 驗收用完時是最後一次驗收的那份
+  # （已經在 output/；結束 harness 前的幾秒內 agent 可能又改了檔案），其餘情況是工作目錄最後的內容
+  [[ -n "${exam_over:-}" ]] || submission "$run/output"
+  vdir="$run/output"
+  # 工作目錄裡的題目檔被改過或刪掉：成績不受影響（評分用原檔），但照樣判 FAIL
+  changed=()
+  if [[ -z "$accept_max" ]]; then
+    for f in "${task_files[@]}"; do cmp -s "$task_orig/$f" "$work/$f" || changed+=("$f"); done
+  fi
+  # agent 的紀錄裡出現 run 目錄或題目原檔的路徑＝它跑出工作目錄，找到了評分檔或別的 harness 交的答案
+  peeked=""; grep -qF -e "$LOG_DIR/runs" -e "$LAB_DIR/evals" "$run/agent.jsonl" 2>/dev/null && peeked=1
+  echo "保留作答目錄 $(tr '\n' ' ' < "$run/tmp-dirs.txt")（debug 用，看完自己刪）" >&2
+fi
+[[ -z "$accept_max" ]] || { accept_ok=1; [[ "$accept_sha" == "$(sha256sum < "$work/accept" 2>/dev/null)" ]] || accept_ok=""; }
 secs=$(( $(date +%s) - start ))
 [[ -f "$run/final.md" ]] || python3 "$LAB_DIR/scripts/compare-runs.py" --final "$run" > "$run/final.md" || true
 
 if [[ -z "$has_tests" ]]; then
   verdict=人工 tests_ok=無 summary="沒有自動驗證"
 else
-  if (cd "$run" && python3 -m unittest -q) > "$run/verify.log" 2>&1; then verdict=PASS; else verdict=FAIL; fi
+  if (cd "$vdir" && python3 -m unittest -q) > "$run/verify.log" 2>&1; then verdict=PASS; else verdict=FAIL; fi
   if [[ "$before" == "$(sha256sum "$run"/test_*.py)" ]]; then tests_ok=未改; else tests_ok=被改; verdict=FAIL; fi
   summary="$(tail -1 "$run/verify.log")"
 fi
+if [[ -n "$accept_max" ]]; then
+  summary="$summary；驗收 $n_accept/$accept_max 次"
+  [[ "$n_accept" -lt "$accept_max" ]] || summary="$summary（用完，結束 harness）"
+  [[ -n "$accept_ok" ]] || { verdict=FAIL summary="$summary；./accept 被改過或刪掉"; }
+fi
+if [[ -n "$isolate" ]]; then
+  (( ${#changed[@]} == 0 )) || { verdict=FAIL summary="$summary；改了題目檔 ${changed[*]}"; }
+  [[ -z "$peeked" ]] || { verdict=FAIL summary="$summary；agent 跑到 harness-lab 的 logs/runs 或 evals（見 agent.jsonl）"; }
+fi
+[[ -z "$interrupted" ]] || summary="$summary；被中斷（Ctrl+C）"
 if [[ -z "$snapshot" ]]; then
   if ! diff -r "$task_orig" "$task_dir" > /dev/null 2>&1; then
     # agent 跑出 run 目錄改了題目原檔：run 目錄裡的結果不代表它解了題。原本的內容在 escaped.diff 的 - 那一側

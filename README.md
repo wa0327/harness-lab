@@ -293,20 +293,23 @@ MODEL=ds4 scripts/agent-test.sh review-readme pi   # 紀錄的標籤會加上 [d
 | `scripts/test-codex-router.sh` | 檢查 Codex 設定的 provider、base URL、key（401 會提示），並用設定裡的模型（或 `CODEX_MODEL`）實際發一次 chat completion。接 router 時用來確認模型名稱對不對 |
 | `scripts/serve-fim.sh` | Tab 補全伺服器，port 8012，給 llama.vscode / Continue。context 8K、batch 512 時可以和主模型同時跑（合計 VRAM 7.7GB） |
 | `scripts/bench-moe.sh` | `llama-bench` 掃描 `--n-cpu-moe`，結果寫到 `logs/bench/`。參數是要測的值（預設 40 38 36…），`PP`、`TG` 調整預填與生成長度 |
-| `scripts/agent-test.sh` | `scripts/agent-test.sh <題目> <harness>`：用 `evals/` 裡的同一題測不同 harness（`pi`、`pi-router`、`codex`、`opencode`、`qwen`、`claude`），`claude` 是上限標竿：用家目錄裡的 Claude Code 和你的登入，固定 Opus 5.5，不走本地伺服器，會產生 API 費用（`compare-runs.py` 會列出）。自動驗證並記錄到 `logs/agent-runs.md`，每次的工作目錄與事件紀錄在 `logs/runs/<題目>/<harness>/<日期_時間>/`。`PI_THINKING=off` 可以調 Pi 的思考強度。題目目錄有 `SNAPSHOT`（commit）時（如 `review-readme`），agent 改在 harness-lab 那個 commit 的快照裡工作：快照每個 commit 只拉一次，存在 `/tmp/agent-snapshots/`，開跑前一律 reset + clean 回到乾淨狀態，產出寫到快照裡的 `output/`，跑完複製到 run 目錄的 `output/`，其他改動存成 run 目錄的 `snapshot.diff`。快照刻意放在 harness-lab 外面：放在底下時，agent 會從工作目錄的路徑推出上層才是真正的專案，實測 Qwen Code 因此跑去審查工作區。沒有 `test_*.py` 的題目不自動驗證，結果記為「人工」。其他題目從 `evals/<題目>` 複製，開跑前另存一份原檔，結束時比對，發現 agent 改到原檔就判 FAIL（差異存成 `escaped.diff`）；題目不需要先提交。執行期間 harness-lab 若多了未追蹤的檔案（可能是 agent 用絕對路徑寫到工作目錄外），會發出警告，並把檔案複製到 run 目錄的 `escaped/` |
+| `scripts/agent-test.sh` | `scripts/agent-test.sh <題目> <harness>`：用 `evals/` 裡的同一題測不同 harness（`pi`、`pi-router`、`codex`、`opencode`、`qwen`、`claude`），`claude` 是上限標竿：用家目錄裡的 Claude Code 和你的登入，固定 Opus 5.5，不走本地伺服器，會產生 API 費用（`compare-runs.py` 會列出）。自動驗證並記錄到 `logs/agent-runs.md`，每次的工作目錄與事件紀錄在 `logs/runs/<題目>/<harness>/<日期_時間>/`。`PI_THINKING=off` 可以調 Pi 的思考強度。題目目錄有 `SNAPSHOT`（commit）時（如 `review-readme`），agent 改在 harness-lab 那個 commit 的快照裡工作：快照每個 commit 只拉一次，存在 `/tmp/agent-snapshots/`，開跑前一律 reset + clean 回到乾淨狀態，產出寫到快照裡的 `output/`，跑完複製到 run 目錄的 `output/`，其他改動存成 run 目錄的 `snapshot.diff`。快照刻意放在 harness-lab 外面：放在底下時，agent 會從工作目錄的路徑推出上層才是真正的專案，實測 Qwen Code 因此跑去審查工作區。沒有 `test_*.py` 的題目不自動驗證，結果記為「人工」。題目目錄有 `ISOLATE` 或 `ACCEPT` 時（如 `gnc-stub`），agent 改在 `/tmp` 的工作目錄作答，評分一律用原檔（見下方「評測題目」）。加 `--monitor` 會即時顯示 agent 的思考、回覆、工具呼叫與結果（`scripts/watch-agent.py`，也能單獨用來看某一次 run）。中途按 Ctrl+C 會結束 harness，照常評分記錄，摘要註明被中斷。其他題目從 `evals/<題目>` 複製，開跑前另存一份原檔，結束時比對，發現 agent 改到原檔就判 FAIL（差異存成 `escaped.diff`）；題目不需要先提交。執行期間 harness-lab 若多了未追蹤的檔案（可能是 agent 用絕對路徑寫到工作目錄外），會發出警告，並把檔案複製到 run 目錄的 `escaped/` |
 | `bin/opencode` | OpenCode 的包裝腳本，把 XDG 目錄導向 `.home/opencode/` |
 | `scripts/compare-runs.py` | 比較多次執行的 token、回合數、工具呼叫、程式差異與最終回覆。`--latest fix-inventory` 取每種 harness 最新一次；`--md` 輸出 Markdown |
 | `scripts/setup-tools.sh`、`install-llama.sh`、`get-models.sh` | 安裝工具、llama.cpp 與模型，全部放在專案內。`setup-tools.sh` 會先檢查前置需求 |
 
 ### 評測題目（`evals/`）
 
-目前有 `hi`、`fix-inventory`、`implement-duration`（較難）、`review-readme`、`cwd-probe` 五題。`hi` 是冒煙測試：只要回答 hi，幾秒就跑完，用來確認 harness、伺服器、模型整條路都通，例如 `scripts/agent-test.sh hi opencode`。`cwd-probe` 不考能力，是檢查隔離：請 agent 列出工作目錄、照抄環境資訊裡的路徑，用來確認 harness 有沒有把快照以外的東西帶進 context。新增題目時，在 `evals/<名稱>/` 放：
+目前有 `hi`、`fix-inventory`、`implement-duration`（較難）、`gnc-stub`（最難）、`review-readme`、`cwd-probe` 六題。`gnc-stub` 是寫多旋翼的視覺攔截 GNC：從相機的目標框和飛控的姿態算出速度命令，撞上目標。運動學模擬器（`sim.py`）和測試都給 agent，24 個情境各是一個測試，`verify.log` 的 failures 數就是沒過的情境數。限時 7.5 分鐘（`TIMEOUT` 檔 450 秒）。`hi` 是冒煙測試：只要回答 hi，幾秒就跑完，用來確認 harness、伺服器、模型整條路都通，例如 `scripts/agent-test.sh hi opencode`。`cwd-probe` 不考能力，是檢查隔離：請 agent 列出工作目錄、照抄環境資訊裡的路徑，用來確認 harness 有沒有把快照以外的東西帶進 context。新增題目時，在 `evals/<名稱>/` 放：
 
 - `PROMPT.md`：送給 agent 的題目，必要。
 - `test_*.py`：有的話就用 `python3 -m unittest -q` 自動驗證，執行前後比對測試檔的 sha256，被 agent 改過就判 FAIL。沒有的話結果記為「人工」。
 - `SNAPSHOT`：放一個 commit，agent 改在 harness-lab 那個 commit 的快照裡工作（題目就是審查本專案時用）。
+- `ISOLATE`：空檔案即可。agent 改在 `/tmp/agent-work.*` 作答，題目檔（`PROMPT.md` 以外）複製進去並設成唯讀。跑完把工作目錄複製到 run 目錄的 `output/`，用原檔蓋回題目檔，再在那裡跑測試：agent 改了自己那份影響不到成績，但會被判 FAIL。紀錄裡出現 harness-lab 的 `logs/runs` 或 `evals` 路徑（agent 跑出去看評分檔或別人的答案）也判 FAIL。不在 run 目錄作答，是因為 agent 會從路徑推到 harness-lab。
+- `TIMEOUT`：放限時秒數（例如 `3600`），取代預設的 1800 秒；命令列有給 `TIMEOUT` 時以命令列為準。有這個檔時，題目最後會自動加一句「本題限時 N 分鐘…」告訴 agent。
+- `ACCEPT`：放驗收次數上限，用法同 `ISOLATE`，但題目檔不放進工作目錄，agent 只能用 `./accept` 送出驗收：它只在佇列目錄 `/tmp/agent-accept.*` 放請求單，由 `agent-test.sh` 在 agent 的程序之外評分、寫回結果，次數也由這邊計算。用完就結束 harness，成績是最後一次驗收的那份。每次驗收的作答與輸出存在 run 目錄的 `accept/`。
 
-`agent-test.sh` 的環境變數：`TIMEOUT`（每次執行的上限，預設 1800 秒）、`PI_THINKING`、`CODEX_MODEL`（接 router 時填檔名）。每次執行在 run 目錄留下 `agent.jsonl`（事件，給 `compare-runs.py`）、`agent.stderr`、`final.md`（最終回覆）、`meta.json`，有測試時還有 `verify.log`。harness 派了子 agent 時，子 agent 的紀錄另外存到 `subagents/`（`scripts/collect-subagents.py`；Claude Code 的子 agent 訊息本來就在 `agent.jsonl` 裡）。
+`agent-test.sh` 的環境變數：`TIMEOUT`（每次執行的上限，預設是題目目錄 `TIMEOUT` 檔的值，沒有的話 1800 秒）、`PI_THINKING`、`CODEX_MODEL`（接 router 時填檔名）。每次執行在 run 目錄留下 `agent.jsonl`（事件，給 `compare-runs.py`）、`agent.stderr`、`final.md`（最終回覆）、`meta.json`，有測試時還有 `verify.log`。harness 派了子 agent 時，子 agent 的紀錄另外存到 `subagents/`（`scripts/collect-subagents.py`；Claude Code 的子 agent 訊息本來就在 `agent.jsonl` 裡）。
 
 ### 升級與版本
 

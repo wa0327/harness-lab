@@ -24,7 +24,7 @@ command -v nvidia-smi >/dev/null || echo "警告：找不到 nvidia-smi，llama.
 if [[ ! -x .venv/bin/python ]]; then
   python3 -m venv .venv
 fi
-.venv/bin/pip install -q -U pip huggingface_hub
+.venv/bin/pip install -q -U pip huggingface_hub rich   # rich：watch-agent.py 在終端機呈現 Markdown
 
 npm install --ignore-scripts --no-fund --no-audit
 # opencode-ai 的 postinstall 只是把平台對應的執行檔連結到 bin/opencode.exe，--ignore-scripts 時要自己跑。
