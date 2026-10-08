@@ -22,8 +22,9 @@ export MODELS_DIR="${MODELS_DIR:-$LAB_DIR/models}"
 # 主模型用 MODEL 切換（qwen｜glm｜ds4），各值仍可個別覆寫，例：MODEL=glm scripts/serve-main.sh
 # 互動 shell 可直接帶參數：. env.sh glm（腳本 source 時 $1 是腳本自己的參數，所以只認直接 source 的）
 # N_CPU_MOE 和模型的層數有關，所以跟著模型走；各機器的值寫在 env.local.sh 的 N_CPU_MOE_<模型>
+# CTX 也跟著模型走：KV cache 大小依架構差很多，同樣 128K，Qwen3.6 放得下、GLM 會 OOM；可用 CTX_<模型> 覆寫
 # MAIN_PROVIDER 是各 harness 設定裡的 provider 名稱：本機的模型都是 harness-lab，遠端的模型各有一組
-_LAB_PER_MODEL="MAIN_REPO MAIN_FILE MAIN_ALIAS N_CPU_MOE MAIN_PROVIDER"
+_LAB_PER_MODEL="MAIN_REPO MAIN_FILE MAIN_ALIAS N_CPU_MOE MAIN_PROVIDER CTX"
 if [[ ${#BASH_SOURCE[@]} -eq 1 && -n "${1:-}" ]]; then
   # 明確指定模型（. env.sh glm）：一律用該模型的值，不沿用 shell 裡既有的
   MODEL="$1"
@@ -39,23 +40,27 @@ if [[ -n "${_LAB_MODEL:-}" && "$_LAB_MODEL" != "$MODEL" ]]; then
 fi
 case "$MODEL" in
   qwen)
-    _d=(unsloth/Qwen3.6-35B-A3B-GGUF Qwen3.6-35B-A3B-UD-Q4_K_XL.gguf qwen3.6-35b-a3b "${N_CPU_MOE_QWEN:-38}" harness-lab) ;;   # 40 層。resolute 實測：-ub 4096 時 38 是下限（37 OOM），40→38 只快約 2%
+    # 40 層。resolute 實測：-ub 4096 時 38 是下限（37 OOM），40→38 只快約 2%。
+    # 128K：混合架構只有部分層有 KV，VRAM 比 64K 多約 1.2GB（共 6.9GB），速度不變
+    # （64K 時 Qwen Code 約 32K 就壓縮 context，見 README 的 Qwen Code 注意事項）
+    _d=(unsloth/Qwen3.6-35B-A3B-GGUF Qwen3.6-35B-A3B-UD-Q4_K_XL.gguf qwen3.6-35b-a3b "${N_CPU_MOE_QWEN:-38}" harness-lab "${CTX_QWEN:-131072}") ;;
   glm)
-    _d=(unsloth/GLM-4.7-Flash-GGUF GLM-4.7-Flash-UD-Q4_K_XL.gguf glm-4.7-flash "${N_CPU_MOE_GLM:-38}" harness-lab) ;;   # 47 層（第 0 層不是 MoE）。resolute 實測：-ub 4096 時 38 可用
+    # 47 層（第 0 層不是 MoE）。resolute 實測：-ub 4096 時 38 可用。64K 已用 7.7GB，128K 的 KV 要再多 3.6GB，載入就 OOM
+    _d=(unsloth/GLM-4.7-Flash-GGUF GLM-4.7-Flash-UD-Q4_K_XL.gguf glm-4.7-flash "${N_CPU_MOE_GLM:-38}" harness-lab "${CTX_GLM:-65536}") ;;
   ds4)
     # 遠端模型：KK 的 Mac（M5 Max）上的 DeepSeek V4 Flash（284B MoE，Q2），經 Tailscale 連線，按需開機、多人共用。
-    # 不在本機下載或啟動，所以沒有檔案和 N_CPU_MOE（serve-main.sh 等會擋下）
-    _d=("" "" deepseek-v4-flash "" ds4) ;;
+    # 不在本機下載或啟動，所以沒有檔案、N_CPU_MOE 和 CTX（serve-main.sh 等會擋下）
+    _d=("" "" deepseek-v4-flash "" ds4 "") ;;
   *) echo "env.sh：未知的 MODEL=$MODEL（可用 qwen、glm、ds4）" >&2; return 1 2>/dev/null || exit 1 ;;
 esac
 # 沒有 _LAB_MODEL 紀錄卻已經有 MAIN_FILE：多半是從別處繼承來的舊值（例如先 source 舊版 env.sh 才開 VS Code），提醒一下
 if [[ -z "${_LAB_MODEL:-}" && -n "${MAIN_FILE:-}" && "$MAIN_FILE" != "${_d[1]}" ]]; then
   echo "env.sh 警告：MAIN_FILE=$MAIN_FILE 不是 MODEL=$MODEL 的預設檔案，沿用既有值。不是刻意的話執行：unset $_LAB_PER_MODEL" >&2
 fi
-: "${MAIN_REPO:=${_d[0]}}" "${MAIN_FILE:=${_d[1]}}" "${MAIN_ALIAS:=${_d[2]}}" "${N_CPU_MOE:=${_d[3]}}" "${MAIN_PROVIDER:=${_d[4]}}"
+: "${MAIN_REPO:=${_d[0]}}" "${MAIN_FILE:=${_d[1]}}" "${MAIN_ALIAS:=${_d[2]}}" "${N_CPU_MOE:=${_d[3]}}" "${MAIN_PROVIDER:=${_d[4]}}" "${CTX:=${_d[5]}}"
 unset _d
-export MAIN_REPO MAIN_FILE MAIN_ALIAS N_CPU_MOE MAIN_PROVIDER
-export _LAB_MODEL="$MODEL" _LAB_MAIN_REPO="$MAIN_REPO" _LAB_MAIN_FILE="$MAIN_FILE" _LAB_MAIN_ALIAS="$MAIN_ALIAS" _LAB_N_CPU_MOE="$N_CPU_MOE" _LAB_MAIN_PROVIDER="$MAIN_PROVIDER"
+export MAIN_REPO MAIN_FILE MAIN_ALIAS N_CPU_MOE MAIN_PROVIDER CTX
+export _LAB_MODEL="$MODEL" _LAB_MAIN_REPO="$MAIN_REPO" _LAB_MAIN_FILE="$MAIN_FILE" _LAB_MAIN_ALIAS="$MAIN_ALIAS" _LAB_N_CPU_MOE="$N_CPU_MOE" _LAB_MAIN_PROVIDER="$MAIN_PROVIDER" _LAB_CTX="$CTX"
 export FIM_REPO="${FIM_REPO:-ggml-org/Qwen2.5-Coder-1.5B-Q8_0-GGUF}"
 export FIM_FILE="${FIM_FILE:-qwen2.5-coder-1.5b-q8_0.gguf}"
 
@@ -83,8 +88,7 @@ export FIM_CTX="${FIM_CTX:-8192}"     # 補全不需長 context；0（原生 32K
 export FIM_BATCH="${FIM_BATCH:-512}"
 
 # 效能參數（resolute 用 scripts/bench-moe.sh 實測後選定，總結見 reports/resolute 實測結果.md）
-# N_CPU_MOE 在上面「模型」段，依 MODEL 而定
-export CTX="${CTX:-65536}"
+# N_CPU_MOE、CTX 在上面「模型」段，依 MODEL 而定
 export BATCH="${BATCH:-4096}"
 export UBATCH="${UBATCH:-4096}"   # 實測預填比 2048 快約 22%，生成慢約 4%
 export KV_TYPE="${KV_TYPE:-q8_0}"

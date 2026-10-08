@@ -3,7 +3,7 @@
 
 model = "qwen3.6-35b-a3b"
 model_provider = "harness-lab"
-model_context_window = 65536
+model_context_window = 131072   # qwen 的 CTX；用 glm 時伺服器只有 65536，要另外 -c model_context_window=65536
 
 # 思考強度（minimal、low、medium、high、xhigh…），經 Responses API 的 reasoning.effort 送出。
 # 尚未驗證 llama-server 會不會換成 Qwen／GLM 的 enable_thinking，所以預設不設。

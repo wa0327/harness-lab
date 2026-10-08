@@ -15,7 +15,7 @@
         "baseUrl": "http://127.0.0.1:8080/v1",
         "envKey": "API_KEY",
         "generationConfig": {
-          "contextWindowSize": 65536,
+          "contextWindowSize": 131072,
           "samplingParams": { "temperature": 1.0, "top_p": 0.95, "top_k": 20, "max_tokens": 16384 }
         }
       },
