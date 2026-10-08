@@ -91,7 +91,8 @@ case "$harness" in
     (cd "$work" && timeout "$TIMEOUT" pi -p --mode json --no-session ${PI_THINKING:+--thinking "$PI_THINKING"} --model "llama.cpp/${MAIN_FILE%.gguf}" "$prompt") \
       > "$run/agent.jsonl" 2> "$run/agent.stderr" ;;
   codex)
-    timeout "$TIMEOUT" codex exec --json -o "$run/final.md" -C "$work" --skip-git-repo-check -s workspace-write --ephemeral -c "model_provider=\"$MAIN_PROVIDER\"" -c "model=\"${CODEX_MODEL:-$MAIN_ALIAS}\"" "$prompt" \
+    # 不加 --ephemeral：要讓 Codex 寫 rollout 檔，子 agent 的紀錄才收得到（見下方 collect-subagents.py）
+    timeout "$TIMEOUT" codex exec --json -o "$run/final.md" -C "$work" --skip-git-repo-check -s workspace-write -c "model_provider=\"$MAIN_PROVIDER\"" -c "model=\"${CODEX_MODEL:-$MAIN_ALIAS}\"" "$prompt" \
       > "$run/agent.jsonl" 2> "$run/agent.stderr" ;;
   opencode)
     # OpenCode 以 git 根目錄當專案根目錄，不 git init 的話會是 harness-lab，實測模型因此跑去改了 evals/ 的原檔
@@ -114,6 +115,8 @@ case "$harness" in
 esac 9>&-   # 不讓 harness 繼承快照鎖：鎖跟著 fd 走，背景子程序沒結束的話，下一個 run 會拿不到
 agent_exit=$?
 set -e
+# 子 agent 的紀錄不在 agent.jsonl 裡，從各 harness 的存放位置複製到 run 目錄的 subagents/
+python3 -I "$LAB_DIR/scripts/collect-subagents.py" "$harness" "$run" "$work" "$start" || true
 if [[ -n "$snapshot" ]]; then
   mkdir -p "$run/output" && cp -a "$work/output/." "$run/output/"
   # 快照裡 output/ 以外的改動下次開跑前會被清掉，先存一份
