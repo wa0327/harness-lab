@@ -5,6 +5,11 @@ model = "qwen3.6-35b-a3b"
 model_provider = "harness-lab"
 model_context_window = 65536
 
+# 思考強度（minimal、low、medium、high、xhigh…），經 Responses API 的 reasoning.effort 送出。
+# 尚未驗證 llama-server 會不會換成 Qwen／GLM 的 enable_thinking，所以預設不設。
+# 確定有效的關法在伺服器端：scripts/serve-main.sh --reasoning off（所有用戶端都不思考）
+# model_reasoning_effort = "low"
+
 [model_providers.harness-lab]
 name = "llama.cpp (harness-lab)"
 base_url = "http://127.0.0.1:8080/v1"
