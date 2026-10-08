@@ -20,7 +20,8 @@ export FIM_REPO="${FIM_REPO:-ggml-org/Qwen2.5-Coder-1.5B-Q8_0-GGUF}"
 export FIM_FILE="${FIM_FILE:-qwen2.5-coder-1.5b-q8_0.gguf}"
 
 # 伺服器
-export HOST="${HOST:-127.0.0.1}"
+export HOST="${HOST:-0.0.0.0}"
+export API_KEY="${API_KEY-llama-cpp@jack}"   # Pi、Codex 從這個變數讀；API_KEY= 可關閉驗證
 export MAIN_PORT="${MAIN_PORT:-8080}"
 export FIM_PORT="${FIM_PORT:-8012}"   # llama.vscode 預設連 8012
 export FIM_CTX="${FIM_CTX:-8192}"     # 補全不需長 context；0（原生 32K）會和主模型搶 VRAM 而 OOM

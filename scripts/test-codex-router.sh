@@ -6,6 +6,8 @@ set -euo pipefail
 source "$(dirname "$0")/../env.sh"
 
 CONFIG="$CODEX_HOME/config.toml"
+auth=()
+[[ -n "$API_KEY" ]] && auth=(-H "Authorization: Bearer $API_KEY")
 
 echo "=== Codex Router 檢查 ==="
 echo ""
@@ -29,7 +31,7 @@ echo ""
 
 # 2. 連線測試：直接 call base_url/models
 echo "[2] 連線測試（curl $base_url/models）"
-resp=$(curl -s -w "\n%{http_code}" "$base_url/models" 2>&1 || true)
+resp=$(curl -s -w "\n%{http_code}" "${auth[@]}" "$base_url/models" 2>&1 || true)
 http_code=$(echo "$resp" | tail -1)
 body=$(echo "$resp" | sed '$d')
 
@@ -43,6 +45,8 @@ data = json.load(sys.stdin)
 for m in data.get('data', []):
   print(f\"  - {m.get('id', '?')}\")
 " 2>/dev/null || echo "  $body"
+elif [[ "$http_code" == "401" ]]; then
+  echo "  ❌ HTTP 401 — API key 不符（檢查伺服器啟動時的 API_KEY）"
 else
   echo "  ❌ HTTP $http_code — router 可能沒在跑"
 fi
@@ -51,7 +55,7 @@ echo ""
 # 3. 實際發一個簡單 request 看回傳哪個 model
 # 取 router 實際可用的模型來測
 echo "[3] 實際呼叫測試（1 token 的 chat completion）"
-actual_model=$(curl -s "$base_url/models" 2>/dev/null | python3 -c "
+actual_model=$(curl -s "${auth[@]}" "$base_url/models" 2>/dev/null | python3 -c "
 import sys, json
 data = json.load(sys.stdin)
 print(data['data'][0]['id'] if data.get('data') else '')
@@ -59,7 +63,7 @@ print(data['data'][0]['id'] if data.get('data') else '')
 [[ -z "$actual_model" ]] && actual_model="$model"
 echo "  (用實際模型: $actual_model)"
 
-chat_resp=$(curl -s -w "\n%{http_code}" -X POST "$base_url/chat/completions" \
+chat_resp=$(curl -s -w "\n%{http_code}" -X POST "${auth[@]}" "$base_url/chat/completions" \
   -H "Content-Type: application/json" \
   -d "{
     \"model\": \"$actual_model\",

@@ -9,3 +9,4 @@ model_context_window = 65536
 name = "llama.cpp (harness-lab)"
 base_url = "http://127.0.0.1:8080/v1"
 wire_api = "responses"
+env_key = "API_KEY"   # env.sh 匯出；Codex 不認 api_key 欄位

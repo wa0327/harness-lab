@@ -24,9 +24,11 @@ scripts/install-llama.sh    # 下載 llama.cpp（約 560MB）
 scripts/get-models.sh       # 下載主模型與 FIM 模型（約 24GB）
 
 scripts/bench-moe.sh        # 掃描 --n-cpu-moe（resolute 已跑過，結果已寫進 env.sh）
-scripts/serve-main.sh       # 啟動主模型，http://127.0.0.1:8080
-scripts/serve-fim.sh        # （選用）Tab 補全，http://127.0.0.1:8012
+scripts/serve-main.sh       # 啟動主模型，http://<本機 IP>:8080
+scripts/serve-fim.sh        # （選用）Tab 補全，http://<本機 IP>:8012
 ```
+
+伺服器預設聽 `0.0.0.0`，區網內其它電腦也連得到，所以加了 API key：`env.sh` 的 `API_KEY`（預設 `llama-cpp@jack`），三支 serve 腳本都會帶上 `--api-key`，Pi 和 Codex 的設定也從這個變數讀。其它用戶端送 `Authorization: Bearer <key>` 即可。只在本機用、不想驗證的話，可以改用 `HOST=127.0.0.1 API_KEY= scripts/serve-main.sh` 啟動。
 
 另開終端機使用 harness：
 
@@ -36,7 +38,7 @@ pi --model harness-lab/qwen3.6-35b-a3b --thinking off   # 小改動用 off／low
 codex
 ```
 
-想走 Pi 官方的 router 模式時，改跑 `scripts/serve-router.sh`。router 會依請求的模型名稱（檔名，如 `Qwen3.6-35B-A3B-UD-Q4_K_XL`）自動載入，所以 Codex 等一般用戶端不必先手動載入。Pi 這邊，第一次要在互動模式裡執行 `/login llama.cpp` 和 `/llama`，模型清單才會存下來，之後才能用 `pi --model llama.cpp/Qwen3.6-35B-A3B-UD-Q4_K_XL`。resolute 上已經做過這一步。
+想走 Pi 官方的 router 模式時，改跑 `scripts/serve-router.sh`。router 會依請求的模型名稱（檔名，如 `Qwen3.6-35B-A3B-UD-Q4_K_XL`）自動載入，所以 Codex 等一般用戶端不必先手動載入。Pi 這邊，第一次要在互動模式裡執行 `/login llama.cpp`（key 填 `API_KEY` 的值）和 `/llama`，模型清單才會存下來，之後才能用 `pi --model llama.cpp/Qwen3.6-35B-A3B-UD-Q4_K_XL`。resolute 上已經做過這一步。
 
 ## 腳本
 
@@ -53,9 +55,11 @@ codex
 
 ## 其他 harness 的接法
 
-- **Cline（VS Code）**：Provider 選 OpenAI Compatible，Base URL `http://127.0.0.1:8080/v1`，Model `qwen3.6-35b-a3b`，開啟 Compact Prompt。
-- **llama.vscode（Tab 補全）**：先跑 `scripts/serve-fim.sh`，擴充預設就連 `http://127.0.0.1:8012`。
-- **Claude Code**：`ANTHROPIC_BASE_URL=http://127.0.0.1:8080`。系統提示約 33k token，以實測約 1,000 tok/s 的預填速度推估，第一回合要等 30 秒以上。尚未實測。
+以下的 `<key>` 都是 `API_KEY` 的值；從其它電腦連時，把 `127.0.0.1` 換成這台的 IP。
+
+- **Cline（VS Code）**：Provider 選 OpenAI Compatible，Base URL `http://127.0.0.1:8080/v1`，API Key 填 `<key>`，Model `qwen3.6-35b-a3b`，開啟 Compact Prompt。
+- **llama.vscode（Tab 補全）**：先跑 `scripts/serve-fim.sh`，擴充預設就連 `http://127.0.0.1:8012`，要在擴充設定的 API key 欄位填 `<key>`。
+- **Claude Code**：`ANTHROPIC_BASE_URL=http://127.0.0.1:8080 ANTHROPIC_AUTH_TOKEN=<key>`。系統提示約 33k token，以實測約 1,000 tok/s 的預填速度推估，第一回合要等 30 秒以上。尚未實測。
 
 ## 注意事項
 

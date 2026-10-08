@@ -8,6 +8,7 @@ source "$(dirname "$0")/../env.sh"
 exec "$LLAMA_BIN/llama-server" \
   -m "$MODELS_DIR/$FIM_FILE" \
   --host "$HOST" --port "$FIM_PORT" \
+  ${API_KEY:+--api-key "$API_KEY"} \
   -ngl 99 -fa on -ub "$FIM_BATCH" -b "$FIM_BATCH" \
   -c "$FIM_CTX" --cache-reuse 256 \
   "$@"
