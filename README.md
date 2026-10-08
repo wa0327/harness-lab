@@ -2,7 +2,7 @@
 
 在 8GB VRAM 的 Linux 筆電上跑本地 LLM，接上各種 agent harness（Pi、Codex、OpenCode、Qwen Code、VS Code 擴充…）測試兼日常使用。
 
-**原則：所有東西都在本目錄內**，包括 llama.cpp 執行檔、模型、Python venv、npm 套件、各 harness 的設定與快取。刪掉這個目錄就清乾淨，不會動到家目錄的 `~/.codex`、`~/.pi`、`~/.qwen`、`~/.config/opencode` 等。
+**原則：所有東西都在本目錄內**，包括 llama.cpp 執行檔、模型、Python venv、npm 套件、各 harness 的設定與快取。刪掉這個目錄就清乾淨，不會動到家目錄的 `~/.codex`、`~/.pi`、`~/.qwen`、`~/.config/opencode` 等。例外：沒有先 `source env.sh` 就執行時，會用到全域安裝的版本和家目錄的設定（例如另外裝了 `codex`，或直接在這裡跑 `npm` 會用 `~/.npm` 快取）；Claude Code、Cline、llama.vscode 這些不在本專案裡的工具，設定也一樣在家目錄（包括 `agent-test.sh` 的 `claude` 考生）。`agent-test.sh` 的題目快照放在 `/tmp/agent-snapshots/`，但那只是從 git 解壓出來的快取，被清掉會自動重建。
 
 ## 組合
 
@@ -22,53 +22,66 @@
 
 | 項目 | 需求 | 檢查 |
 |---|---|---|
-| NVIDIA 驅動 | 支援 CUDA 13.x（resolute 用 610 版）；太舊的話見步驟 2 | `nvidia-smi` |
+| NVIDIA 驅動 | 支援 CUDA 13.x：`nvidia-smi` 右上角的 `CUDA Version` 是 13.0 以上（resolute 用 610 版）；太舊的話見步驟 2 | `nvidia-smi` |
+| RAM | 32GB 左右：主模型 22.4GB，MoE 專家大多放在系統 RAM（resolute 是 30GB + 32GB swap）。不夠的話改用 GLM（17.5GB） | `free -g` |
+| Shell | bash：`env.sh` 用了 bash 專屬的語法，zsh、fish 不能 `source` | — |
 | Node.js | 22.19 以上（Pi 的要求） | `node --version` |
 | Python | 3.x，含 venv 模組（Ubuntu 可能要 `sudo apt install python3-venv`） | `python3 -m venv --help` |
-| 其他 | git、curl、tar | — |
-| 磁碟 | 約 25GB（模型 23GB、llama.cpp 約 800MB、npm 套件約 600MB） | `df -h` |
+| 其他 | git、curl、tar、`lscpu`（算實體核心數） | — |
+| 磁碟 | 約 30GB（主模型加 FIM 24GB、llama.cpp 解壓後約 800MB、npm 套件約 1.5GB、npm 快取約 1GB）；要試 GLM 再加 18GB | `df -h` |
 
 `scripts/setup-tools.sh` 開頭會自動檢查，缺什麼會先列出來。
 
-### 1. Clone 與安裝
+### 1. Clone
 
 ```bash
 git clone <repo 位址> ~/repos/harness-lab && cd ~/repos/harness-lab
-cp env.local.sh.example env.local.sh   # 這台機器自己的設定，不進版控
-
-scripts/setup-tools.sh      # venv（hf）、Pi、Codex、OpenCode、Qwen Code（版本依 package-lock.json），並把 configs/ 範本複製到 .home/
-scripts/install-llama.sh    # llama.cpp（固定 build），約 560MB
-scripts/get-models.sh       # 主模型與 FIM 模型，約 24GB；設 HF_TOKEN 速率限制較寬鬆
+cp env.local.sh.example env.local.sh   # 這台機器自己的設定，不進版控；下一步編輯
 ```
 
-### 2. 編輯 `env.local.sh`
+### 2. 編輯 `env.local.sh`（在安裝之前）
 
+- **驅動不支援 CUDA 13**：設 `LLAMA_CUDA=12.8`。要在下一步裝 llama.cpp 之前設；已經裝了 13.4 版的話，設好後重跑 `scripts/install-llama.sh` 會改裝 12.8 版。
 - **要讓區網內其它電腦使用時**：同時設 `HOST=0.0.0.0` 和自己的 `API_KEY`，見下方「對外開放與 API key」。預設只聽本機，key 是公開的預設值 `harness-lab`。
-- **驅動不支援 CUDA 13**：設 `LLAMA_CUDA=12.8`，再重跑 `scripts/install-llama.sh`。
-- 其它可調項目見檔案裡的註解。一律用 `: "${變數:=值}"` 的寫法，命令列上的環境變數才能繼續優先。
+- **下載模型想放寬 Hugging Face 的速率限制**：加一行 `export HF_TOKEN=...`，或之後執行 `source env.sh && hf auth login`（`HF_HOME` 指向專案內，token 也存在 `.cache/huggingface/`）。
+- 一律用 `: "${變數:=值}"` 的寫法，命令列上的環境變數才能繼續優先。其它可調的變數（`CTX_<模型>`、`BATCH`、`UBATCH`、`KV_TYPE`、`LOAD_MODE`、`THREADS`、`MAIN_PORT`…）的預設值和說明在 `env.sh`。
+- **改 `MAIN_PORT` 時**：4 份 harness 設定裡的位址寫死 `http://127.0.0.1:8080/v1`，`configs/` 和 `.home/` 都要一起改，否則 harness 連不上。
 
-### 3. 依硬體調參數
+### 3. 安裝
+
+```bash
+scripts/setup-tools.sh      # venv（hf）、Pi、Codex、OpenCode、Qwen Code（版本依 package-lock.json），並把 configs/ 範本複製到 .home/
+scripts/install-llama.sh    # llama.cpp（固定 build），下載約 560MB，解壓後約 800MB
+scripts/get-models.sh       # 主模型與 FIM 模型，約 24GB（參數 main、fim 只下載其中一個，預設 all）
+```
+
+### 4. 依硬體調參數
 
 `env.sh` 的預設值是 **resolute**（RTX 4060 Laptop 8GB + 30GB RAM）實測出來的，換了機器要重新量：
 
 ```bash
-scripts/bench-moe.sh                          # 從 40 往下掃，遇到 OOM 自動停，結果在 logs/bench/
-BATCH=4096 UBATCH=4096 scripts/bench-moe.sh   # 也試試大 batch，預填通常較快
+scripts/bench-moe.sh                          # 預設掃 40 38 36…，遇到 OOM 自動停，結果在 logs/bench/
+scripts/bench-moe.sh 39 38 37                 # 找到大概範圍後細掃：參數就是要測的值
+BATCH=2048 UBATCH=2048 scripts/bench-moe.sh   # 預設 4096 一開始就 OOM 時改試 2048（預填較慢，但省 VRAM）
+MODEL=glm scripts/bench-moe.sh                # 每個模型要各自量
 ```
 
-挑「最小又不 OOM」的 `--n-cpu-moe`，再留一點餘裕（伺服器開 64K context 會比跑分多吃 VRAM），寫進 `env.local.sh`：
+`PP`、`TG` 可以調整跑分時預填與生成的長度（預設 8192、128）。挑「最小又不 OOM」的 `--n-cpu-moe`，再留一點餘裕（伺服器的 context 會比跑分多吃 VRAM：Qwen 預設 128K、GLM 64K，可用 `CTX_<模型>` 調整），寫進 `env.local.sh`：
 
 ```bash
-: "${N_CPU_MOE_QWEN:=36}"   # 每個模型各自一個變數，切換 MODEL 時才不會套錯
+: "${N_CPU_MOE_QWEN:=38}"   # 填自己量出來的值。每個模型各自一個變數（N_CPU_MOE_GLM…），切換 MODEL 時才不會套錯
 ```
 
-### 4. 啟動與驗證
+resolute 的 `-ub 4096` 下限是 38（37 就 OOM），低於這個值的範例照抄會 OOM。
+
+### 5. 啟動與驗證
 
 ```bash
-scripts/serve-main.sh                          # 終端機 1：主模型
+scripts/serve-main.sh                          # 終端機 1：主模型，Ctrl+C 停止
 scripts/serve-fim.sh                           # 終端機 2（選用）：Tab 補全
 
 source env.sh                                  # 終端機 3
+until curl -sf -H "Authorization: Bearer $API_KEY" http://127.0.0.1:8080/health >/dev/null; do sleep 2; done   # 等模型載入完
 curl -s -H "Authorization: Bearer $API_KEY" http://127.0.0.1:8080/v1/models
 scripts/agent-test.sh fix-inventory pi
 scripts/agent-test.sh fix-inventory codex
@@ -77,7 +90,9 @@ scripts/agent-test.sh fix-inventory qwen
 scripts/compare-runs.py --latest fix-inventory
 ```
 
-### 5. 每台機器要重建的狀態
+serve 腳本只輸出到終端機，不會自己寫 log。要留紀錄或放背景跑時自己重導向，例如 `scripts/serve-main.sh > logs/server-main.log 2>&1 &`，停止時 `pkill -f llama-server`。
+
+### 6. 每台機器要重建的狀態
 
 `.home/`（各 harness 的設定、憑證、對話紀錄）和 `logs/` 不進版控，所以不會跟著 clone 過來：
 
@@ -144,6 +159,12 @@ scripts/serve-fim.sh        # （選用）Tab 補全，http://127.0.0.1:8012
 
 Pi 走 router 時用的 `LLAMA_API_KEY` 也由 `env.sh` 設成同一個值。三支 serve 腳本一律帶 `--api-key "$API_KEY"`。`HOST` 對外開放但 `API_KEY` 還是預設值時，`env.sh` 會發出警告。
 
+對外開放時還要注意：
+
+- **流量是明文 HTTP**，key 在區網上可能被側錄，只在信任的網路使用。只有自己的其他電腦要連的話，用 SSH tunnel 更安全，也不用開 `HOST=0.0.0.0`：`ssh -L 8080:127.0.0.1:8080 resolute`。
+- 有開防火牆（例如 ufw）的話，要放行 8080（FIM 是 8012）。`HOST` 對三支 serve 腳本都有效，FIM 也會一起開放。
+- 其它電腦上的 Pi、Codex、OpenCode、Qwen Code 要把設定裡寫死的 `127.0.0.1` 換成這台的 IP。
+
 以前的版本預設不驗證，舊機器上已經存在的 `.home` 設定（Pi 寫死 `"none"`、Codex 註解掉 `env_key`）會在重跑 `scripts/setup-tools.sh` 時自動改成讀 `API_KEY`。
 
 另開終端機使用 harness，各自的用法見下方「使用各 harness」：
@@ -156,16 +177,22 @@ pi --model harness-lab/qwen3.6-35b-a3b --thinking off
 
 ### 切換主模型
 
-`env.sh` 的 `MODEL` 決定主模型：`qwen`（預設，Qwen3.6-35B-A3B）、`glm`（GLM-4.7-Flash，31B/3B 啟用，UD-Q4_K_XL 17.5GB），或遠端的 `ds4`（見下方）。檔名、別名和 `N_CPU_MOE` 都會跟著換：
+`env.sh` 的 `MODEL` 決定主模型：`qwen`（預設，Qwen3.6-35B-A3B）、`glm`（GLM-4.7-Flash，31B/3B 啟用，UD-Q4_K_XL 17.5GB），或遠端的 `ds4`（見下方）。檔名、別名、`N_CPU_MOE` 和 `CTX` 都會跟著換：
 
 ```bash
 MODEL=glm scripts/get-models.sh main
 MODEL=glm scripts/serve-main.sh
-MODEL=glm pi --model harness-lab/glm-4.7-flash
+pi --model harness-lab/glm-4.7-flash                # harness 不讀 MODEL，要自己指定模型
 MODEL=glm scripts/agent-test.sh fix-inventory pi   # 紀錄的標籤會加上 [glm-4.7-flash]
 ```
 
-整個終端機都要換的話，用 `. env.sh glm`（換回來是 `. env.sh qwen`），之後執行的腳本、`pi`、`codex` 都會跟著用。注意不要打成 `MODEL=glm . env.sh`：bash 會在 source 結束後把 `MODEL` 還原，之後的腳本又會回到 qwen。新增模型時，在 `env.sh` 的 `case` 加一段（`N_CPU_MOE` 照現有寫法讀 `N_CPU_MOE_<名稱>`，讓各機器能在 `env.local.sh` 覆寫），並在 `configs/pi/models.json` 加上取樣參數。
+整個終端機都要換的話，用 `. env.sh glm`（換回來是 `. env.sh qwen`），之後執行的腳本（`serve-*.sh`、`get-models.sh`、`bench-moe.sh`、`agent-test.sh`）都會跟著用。**`pi`、`codex` 等 harness 本身不讀 `MODEL`**：模型名稱寫在各自的設定裡（預設都是 qwen），要照下方「指令對照」的「換成 GLM」那一列另外指定。只換伺服器、沒換 harness 的話，Pi 會把 Qwen 的取樣參數送給 GLM。注意不要打成 `MODEL=glm . env.sh`：bash 會在 source 結束後把 `MODEL` 還原，之後的腳本又會回到 qwen。
+
+新增模型時：
+
+1. `env.sh` 的 `case` 加一段。`N_CPU_MOE`、`CTX` 照現有寫法讀 `N_CPU_MOE_<名稱>`、`CTX_<名稱>`，讓各機器能在 `env.local.sh` 覆寫。
+2. 設定範本加上模型：`configs/pi/models.json`（含取樣參數）、`configs/opencode/opencode.json`、`configs/qwen/settings.json`。Codex 執行時用 `-m` 指定就好。已經存在的 `.home/` 設定不會被覆蓋，要一起改（見「設定範本與 `.home/` 的關係」）。
+3. `MODEL=<名稱> scripts/get-models.sh main`、`MODEL=<名稱> scripts/bench-moe.sh`，把量出來的 `N_CPU_MOE_<名稱>` 寫進 `env.local.sh`。
 
 #### 遠端模型 `ds4`
 
@@ -182,7 +209,10 @@ MODEL=ds4 scripts/agent-test.sh review-readme pi   # 紀錄的標籤會加上 [d
 - **思考**：伺服器認 `reasoning_effort`，`none` 是關掉。Pi 的 `--thinking off`／`low`／`medium`／`high` 都有對應；Codex 的 `model_reasoning_effort` 對它有效。
 - **評比時要注意**：GPU 是多人共用的，秒數會受別人影響，不能直接和本機模型比；伺服器日誌看得到所有對話內容。
 
-想走 Pi 官方的 router 模式時，改跑 `scripts/serve-router.sh`。router 會依請求的模型名稱（檔名，如 `Qwen3.6-35B-A3B-UD-Q4_K_XL`）自動載入，所以 Codex 等一般用戶端不必先手動載入。Pi 這邊，第一次要在互動模式裡執行 `/login llama.cpp`（key 可留空，會讀 env.sh 匯出的 `LLAMA_API_KEY`，和 `API_KEY` 同值）和 `/llama`，模型清單才會存下來，之後才能用 `pi --model llama.cpp/Qwen3.6-35B-A3B-UD-Q4_K_XL`。resolute 上已經做過這一步。
+想走 Pi 官方的 router 模式時，改跑 `scripts/serve-router.sh`。router 會依請求的模型名稱（檔名，如 `Qwen3.6-35B-A3B-UD-Q4_K_XL`）自動載入，所以 Codex 等一般用戶端不必先手動載入。Pi 這邊，第一次要在互動模式裡執行 `/login llama.cpp`（key 可留空，會讀 env.sh 匯出的 `LLAMA_API_KEY`，和 `API_KEY` 同值）和 `/llama`，模型清單才會存下來，之後才能用 `pi --model llama.cpp/Qwen3.6-35B-A3B-UD-Q4_K_XL`。執行這兩個指令時 `serve-router.sh` 要在跑。resolute 上已經做過這一步。
+
+- `models/` 裡的檔案都會出現在 `/llama` 的清單裡，包括 FIM 模型，**不要選它**：它會用主模型的參數載入，而且因為 `--models-max 1`，會把主模型卸載。
+- router 用同一組參數載入任何模型，所以 context 固定 64K（GLM 開 128K 會 OOM），可以用 `ROUTER_CTX` 改。
 
 ## 使用各 harness
 
@@ -199,12 +229,12 @@ MODEL=ds4 scripts/agent-test.sh review-readme pi   # 紀錄的標籤會加上 [d
 | 互動模式 | `pi --model harness-lab/qwen3.6-35b-a3b` | `codex` | `opencode` | `qwen` |
 | 單次執行後結束 | `pi -p --model ... "題目"` | `codex exec "題目"` | `opencode run "題目"` | `qwen "題目"` |
 | 帶著題目進互動模式 | `pi --model ... "題目"` | `codex "題目"` | `opencode --prompt "題目"` | `qwen -i "題目"` |
-| 換成 GLM | `--model harness-lab/glm-4.7-flash` | `-m glm-4.7-flash` | `-m harness-lab/glm-4.7-flash` | `-m glm-4.7-flash` |
+| 換成 GLM | `--model harness-lab/glm-4.7-flash` | `-m glm-4.7-flash -c model_context_window=65536` | `-m harness-lab/glm-4.7-flash` | `-m glm-4.7-flash` |
 | 換成 ds4（遠端） | `--model ds4/deepseek-v4-flash` | `-c model_provider=ds4 -m deepseek-v4-flash` | `-m ds4/deepseek-v4-flash` | `-m deepseek-v4-flash` |
 | 調思考 | `--thinking off` 或 `medium` | 見下方說明 | 見下方說明 | 見下方說明 |
 | 接續上次對話 | `-c`（最近一次）、`-r`（挑選） | `codex resume --last`、`codex resume` | `-c`、`-s <id>` | `-c`、`-r` |
 | 沙箱 | 無 | `-s read-only`／`workspace-write` | 無 | 無（沒設定 docker） |
-| 自動核准 | 不詢問，一律執行 | `--approve-for-me`，或 `-s danger-full-access` | `run` 加 `--auto` | `-y`，或 `--approval-mode auto-edit` |
+| 自動核准 | 不詢問，一律執行 | `--approve-for-me`（交給自動審查，不是全部放行）；全部放行是 `--dangerously-bypass-approvals-and-sandbox` | `run` 加 `--auto` | `-y`，或 `--approval-mode auto-edit` |
 | 機器可讀輸出 | `--mode json` | `--json` | `--format json` | `-o stream-json` |
 
 換模型時，伺服器也要跑那個模型（`MODEL=glm scripts/serve-main.sh`），見上方「切換主模型」。ds4 是遠端模型，不用啟動伺服器。
@@ -215,6 +245,7 @@ MODEL=ds4 scripts/agent-test.sh review-readme pi   # 紀錄的標籤會加上 [d
 - **思考只有 `off` 和 `medium` 兩段**：其他等級在 `models.json` 裡沒有對應，模型不支援。小改動用 `off` 最快，難題再開 `medium`。也可以寫成 `--model harness-lab/qwen3.6-35b-a3b:off`。
 - **只想讀、不讓它改檔**：`pi --tools read,grep,find,ls`。
 - **沒有沙箱，也不會逐一詢問**：`bash` 以你的權限直接執行，所以只在可以承受的目錄裡用。
+- **第一次啟動會下載 ripgrep**（放到 `.home/pi/bin/`），之後就不會了。
 - **其他**：互動模式裡 Ctrl+P 切換模型。`--no-session` 不留對話紀錄，`--export <檔案>` 把對話匯出成 HTML。
 
 ### Codex
@@ -242,11 +273,13 @@ MODEL=ds4 scripts/agent-test.sh review-readme pi   # 紀錄的標籤會加上 [d
   - `plan`：只分析，不改檔也不執行指令。
   - `default`：改檔和執行指令前都會詢問。
   - `auto-edit`：改檔自動通過，執行指令前仍會詢問。
+  - `auto`：由模型判斷哪些動作安全、可以自動通過。判斷時會另外打模型請求，和下面關掉背景功能的理由一樣，在本機上會拖慢主任務。
   - `yolo`（等同 `-y`）：全部自動通過。
 
   非互動執行時沒人能回答詢問，要用 `-y`。
 - **沒有沙箱**：`-s` 需要 docker 或 podman，這裡沒有設定，所以 `-y` 時 shell 指令以你的權限直接執行。
 - **背景功能已在範本裡關掉**：自動 memory 擷取、memory 整併、工具摘要都會在背景另外呼叫模型，在單一本地伺服器上會拖慢主任務。要用的話改 `.home/qwen/settings.json`。
+- **context 用到「視窗 − 33K」就會自動壓縮**：它固定保留 20K 給摘要輸出、13K 緩衝，`context.autoCompactThreshold` 只能調低、不能調高。視窗 64K 時約 32K 就壓縮，壓縮後只會放回最近碰過的 5 個檔案，其他內容只剩摘要。review-readme 實測時，模型就照著摘要寫出 README 裡不存在的引用，這是 Qwen 預設 `CTX` 改成 128K（約 98K 才壓縮）的原因。stream-json 裡不會出現壓縮事件。
 - **其他**：`--chat-recording false` 不留對話紀錄。`--max-wall-time 10m` 限制總時間，適合無人看管時用。
 
 ## 腳本
@@ -256,13 +289,32 @@ MODEL=ds4 scripts/agent-test.sh review-readme pi   # 紀錄的標籤會加上 [d
 | `env.sh` | 所有路徑與參數。優先順序：命令列環境變數（如 `N_CPU_MOE=32 scripts/serve-main.sh`）> `env.local.sh` > 預設值 |
 | `env.local.sh.example` | 每台機器設定的範本，複製成 `env.local.sh`（不進版控）後修改 |
 | `scripts/serve-main.sh` | 單一模型模式，給 Pi（models.json）、Codex、Cline、Claude Code 等用。提供 OpenAI `/v1/chat/completions`、`/v1/responses` 與 Anthropic `/v1/messages` |
-| `scripts/serve-router.sh` | Pi 官方建議的 router 模式（Pi 裡 `/login llama.cpp`、`/llama`、`/model`）。收到請求時自動載入模型，同時最多一個（`--models-max 1`），請求別的模型會把目前的卸載。已驗證 MoE 等參數會傳給 router 載入的模型；模型名稱是檔名 |
+| `scripts/serve-router.sh` | Pi 官方建議的 router 模式（Pi 裡 `/login llama.cpp`、`/llama`、`/model`）。收到請求時自動載入模型，同時最多一個（`--models-max 1`），請求別的模型會把目前的卸載。已驗證 MoE 等參數會傳給 router 載入的模型；模型名稱是檔名；context 固定 64K（`ROUTER_CTX`） |
+| `scripts/test-codex-router.sh` | 檢查 Codex 設定的 provider、base URL、key（401 會提示），並用設定裡的模型（或 `CODEX_MODEL`）實際發一次 chat completion。接 router 時用來確認模型名稱對不對 |
 | `scripts/serve-fim.sh` | Tab 補全伺服器，port 8012，給 llama.vscode / Continue。context 8K、batch 512 時可以和主模型同時跑（合計 VRAM 7.7GB） |
-| `scripts/bench-moe.sh` | `llama-bench` 掃描 `--n-cpu-moe`，結果寫到 `logs/bench/` |
-| `scripts/agent-test.sh` | `scripts/agent-test.sh <題目> <harness>`：用 `evals/` 裡的同一題測不同 harness（`pi`、`pi-router`、`codex`、`opencode`、`qwen`、`claude`），`claude` 是上限標竿：用家目錄裡的 Claude Code 和你的登入，固定 Opus 5.5，不走本地伺服器，會產生 API 費用（`compare-runs.py` 會列出）。自動驗證並記錄到 `logs/agent-runs.md`，每次的工作目錄與事件紀錄在 `logs/runs/<題目>/<harness>/<日期_時間>/`。`PI_THINKING=off` 可以調 Pi 的思考強度。題目目錄有 `SNAPSHOT`（commit）時（如 `review-readme`），agent 改在 harness-lab 那個 commit 的快照裡工作：快照每個 commit 只拉一次，存在 `.cache/snapshots/`，開跑前一律 reset + clean 回到乾淨狀態，產出寫到快照裡的 `output/`（符號連結到 run 目錄的 `output/`），其他改動存成 run 目錄的 `snapshot.diff`。沒有 `test_*.py` 的題目不自動驗證，結果記為「人工」。其他題目從 `evals/<題目>` 複製，開始前會檢查它是否乾淨，結束後若發現 agent 改到原檔就判 FAIL。執行期間 harness-lab 若多了未追蹤的檔案（可能是 agent 用絕對路徑寫到工作目錄外），會發出警告，並把檔案複製到 run 目錄的 `escaped/` |
+| `scripts/bench-moe.sh` | `llama-bench` 掃描 `--n-cpu-moe`，結果寫到 `logs/bench/`。參數是要測的值（預設 40 38 36…），`PP`、`TG` 調整預填與生成長度 |
+| `scripts/agent-test.sh` | `scripts/agent-test.sh <題目> <harness>`：用 `evals/` 裡的同一題測不同 harness（`pi`、`pi-router`、`codex`、`opencode`、`qwen`、`claude`），`claude` 是上限標竿：用家目錄裡的 Claude Code 和你的登入，固定 Opus 5.5，不走本地伺服器，會產生 API 費用（`compare-runs.py` 會列出）。自動驗證並記錄到 `logs/agent-runs.md`，每次的工作目錄與事件紀錄在 `logs/runs/<題目>/<harness>/<日期_時間>/`。`PI_THINKING=off` 可以調 Pi 的思考強度。題目目錄有 `SNAPSHOT`（commit）時（如 `review-readme`），agent 改在 harness-lab 那個 commit 的快照裡工作：快照每個 commit 只拉一次，存在 `/tmp/agent-snapshots/`，開跑前一律 reset + clean 回到乾淨狀態，產出寫到快照裡的 `output/`，跑完複製到 run 目錄的 `output/`，其他改動存成 run 目錄的 `snapshot.diff`。快照刻意放在 harness-lab 外面：放在底下時，agent 會從工作目錄的路徑推出上層才是真正的專案，實測 Qwen Code 因此跑去審查工作區。沒有 `test_*.py` 的題目不自動驗證，結果記為「人工」。其他題目從 `evals/<題目>` 複製，開始前會檢查它是否乾淨，結束後若發現 agent 改到原檔就判 FAIL。執行期間 harness-lab 若多了未追蹤的檔案（可能是 agent 用絕對路徑寫到工作目錄外），會發出警告，並把檔案複製到 run 目錄的 `escaped/` |
 | `bin/opencode` | OpenCode 的包裝腳本，把 XDG 目錄導向 `.home/opencode/` |
 | `scripts/compare-runs.py` | 比較多次執行的 token、回合數、工具呼叫、程式差異與最終回覆。`--latest fix-inventory` 取每種 harness 最新一次；`--md` 輸出 Markdown |
 | `scripts/setup-tools.sh`、`install-llama.sh`、`get-models.sh` | 安裝工具、llama.cpp 與模型，全部放在專案內。`setup-tools.sh` 會先檢查前置需求 |
+
+### 評測題目（`evals/`）
+
+目前有 `fix-inventory`、`implement-duration`（較難）、`review-readme`、`cwd-probe` 四題。`cwd-probe` 不考能力，是檢查隔離：請 agent 列出工作目錄、照抄環境資訊裡的路徑，用來確認 harness 有沒有把快照以外的東西帶進 context。新增題目時，在 `evals/<名稱>/` 放：
+
+- `PROMPT.md`：送給 agent 的題目，必要。
+- `test_*.py`：有的話就用 `python3 -m unittest -q` 自動驗證，執行前後比對測試檔的 sha256，被 agent 改過就判 FAIL。沒有的話結果記為「人工」。
+- `SNAPSHOT`：放一個 commit，agent 改在 harness-lab 那個 commit 的快照裡工作（題目就是審查本專案時用）。
+
+`agent-test.sh` 的環境變數：`TIMEOUT`（每次執行的上限，預設 1800 秒）、`PI_THINKING`、`CODEX_MODEL`（接 router 時填檔名）。每次執行在 run 目錄留下 `agent.jsonl`（事件，給 `compare-runs.py`）、`agent.stderr`、`final.md`（最終回覆）、`meta.json`，有測試時還有 `verify.log`。harness 派了子 agent 時，子 agent 的紀錄另外存到 `subagents/`（`scripts/collect-subagents.py`；Claude Code 的子 agent 訊息本來就在 `agent.jsonl` 裡）。
+
+### 升級與版本
+
+測過的版本：Pi 1.1.0、Codex 0.161.0、OpenCode 1.18.35、Qwen Code 0.25.0（`package-lock.json`），llama.cpp b11469（`env.sh` 的 `LLAMA_BUILD`）。
+
+- **升級 harness**：`source env.sh && npm install <套件>@latest --ignore-scripts`，再重跑 `scripts/setup-tools.sh`（OpenCode 的 postinstall 由它處理），跑一輪 `agent-test.sh` 確認沒問題後提交 `package-lock.json`。`package.json` 都寫 `latest`，版本靠 lockfile 固定；`setup-tools.sh` 用的是 `npm install` 而不是 `npm ci`，嚴格來說不保證完全照 lockfile 裝。
+- **試新的 llama.cpp**：在 `env.local.sh` 設 `LLAMA_BUILD`，再跑 `scripts/install-llama.sh`，`current` 會切到新版。不要只用 `scripts/install-llama.sh <build>`：那樣 `LLAMA_BUILD` 沒變，`bench-moe.sh` 的紀錄會標錯版本。改回原本的值再重跑就能退回。
+- **`hf`**：`setup-tools.sh` 每次都 `pip install -U huggingface_hub`，沒有固定版本，所以「整份重設」時也會順便升級它。
 
 ## 其他 harness 的接法
 
@@ -271,6 +323,20 @@ MODEL=ds4 scripts/agent-test.sh review-readme pi   # 紀錄的標籤會加上 [d
 - **Cline（VS Code）**：Provider 選 OpenAI Compatible，Base URL `http://127.0.0.1:8080/v1`，API Key 填 `<key>`，Model `qwen3.6-35b-a3b`，開啟 Compact Prompt。
 - **llama.vscode（Tab 補全）**：先跑 `scripts/serve-fim.sh`，擴充預設就連 `http://127.0.0.1:8012`，要在擴充設定的 API key 欄位填 `<key>`。
 - **Claude Code**：`ANTHROPIC_BASE_URL=http://127.0.0.1:8080 ANTHROPIC_AUTH_TOKEN=<key>`。系統提示約 33k token，以實測約 1,000 tok/s 的預填速度推估，第一回合要等 30 秒以上。尚未實測。
+
+## 疑難排解
+
+| 症狀 | 原因與處理 |
+|---|---|
+| 伺服器啟動或長對話時 OOM | 調高 `N_CPU_MOE_<模型>`，或降低 `CTX_<模型>` |
+| harness 收到 401 | 伺服器和 harness 的 `API_KEY` 不同，例如伺服器啟動後才改 `env.local.sh`，或這個 shell 沒有重新 `source env.sh`。`scripts/test-codex-router.sh` 可以檢查 |
+| `curl` 一開始連不上 | 模型還在載入，等 `/health` 回 200（見步驟 5） |
+| `env.sh 警告：MAIN_FILE=...` | 從舊環境繼承了變數，照警告 `unset`，或用 `. env.sh qwen` |
+| `agent-test.sh`：`evals/<題目> 有未提交的改動` | `git checkout -- evals/<題目>`，並刪掉多出來的檔案 |
+| `agent-test.sh`：`另一個 run 正在用` | 同一個快照同時只能有一個 run，等前一個結束 |
+| OpenCode 的設定跑到家目錄 | 執行到的是 `node_modules/.bin/opencode`，先 `source env.sh` |
+| Codex 警告 `Model metadata ... not found` | 可以忽略 |
+| Qwen Code 長任務的後半段開始答非所問 | context 被自動壓縮了，見「Qwen Code」 |
 
 ## 注意事項
 
@@ -281,7 +347,7 @@ MODEL=ds4 scripts/agent-test.sh review-readme pi   # 紀錄的標籤會加上 [d
 ## 測試結果（resolute）
 
 - **速度**：預填約 1,160 tok/s、生成約 43 tok/s（`--n-cpu-moe 38`、`-ub 4096`）。
-- **解題**：Pi、Codex、OpenCode、Qwen Code 兩道題全部通過。關掉思考的 Pi 解較難的題目只要 66 秒；開思考時各 harness 要 2 到 10 分鐘，主要看模型想了多久。
+- **解題**：Pi、Codex、OpenCode、Qwen Code 兩道題全部通過。關掉思考的 Pi 解較難的 `implement-duration` 只要 66 秒；開思考時各 harness 要 2 到 10 分鐘，主要看模型想了多久。
 
 詳見 [reports/resolute 實測結果.md](<reports/resolute 實測結果.md>)。
 
@@ -291,6 +357,6 @@ MODEL=ds4 scripts/agent-test.sh review-readme pi   # 紀錄的標籤會加上 [d
 |---|---|---|
 | `scripts/`、`bin/`、`configs/`、`evals/` | 腳本、harness 包裝腳本、設定範本、評測題目（每個子目錄一題） | ✅ |
 | `reports/`、`research_notes/` | 調研報告、實測總結等人工整理的文件 | ✅ |
-| `logs/` | 自動產生的紀錄：跑分輸出、`agent-runs.md`、`runs/<題目>/<harness>/<日期_時間>/`（每次測試的工作目錄）、伺服器 log | ❌ |
+| `logs/` | 自動產生的紀錄：跑分輸出、`agent-runs.md`、`runs/<題目>/<harness>/<日期_時間>/`（每次測試的工作目錄）、伺服器 log（serve 腳本不會自己寫，見步驟 5） | ❌ |
 | `vendor/`、`models/`、`node_modules/`、`.venv/`、`.cache/`、`.home/` | 工具、模型、快取、各 harness 的設定與憑證 | ❌ |
-| `env.local.sh` | 這台機器自己的設定（API key、`N_CPU_MOE` 等） | ❌ |
+| `env.local.sh` | 這台機器自己的設定（API key、`N_CPU_MOE`、`CTX` 等） | ❌ |

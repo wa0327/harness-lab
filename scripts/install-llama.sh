@@ -5,12 +5,20 @@ set -euo pipefail
 source "$(dirname "$0")/../env.sh"
 
 build="${1:-$LLAMA_BUILD}"
+[[ -n "$build" ]] || { echo "沒有指定 build" >&2; exit 2; }
 dest="$LAB_DIR/vendor/llama.cpp/$build"
 base="https://github.com/ggml-org/llama.cpp/releases/download/$build"
 
-if [[ -x "$dest/llama-server" ]]; then
-  echo "已安裝：$dest"
+# 目錄只用 build 命名，裝的是哪個 CUDA 版本記在 .cuda；換了 LLAMA_CUDA（例如驅動太舊改 12.8）重跑時才會重新下載。
+# 這個檔加入前裝的沒有記錄，視為當時的預設 13.4
+installed_cuda="$(cat "$dest/.cuda" 2>/dev/null || echo 13.4)"
+if [[ -x "$dest/llama-server" && "$installed_cuda" == "$LLAMA_CUDA" ]]; then
+  echo "已安裝：$dest（CUDA $LLAMA_CUDA）"
 else
+  if [[ -e "$dest" ]]; then
+    echo "$dest 是 CUDA $installed_cuda 版，改裝 CUDA $LLAMA_CUDA 版"
+    rm -rf "$dest"
+  fi
   tmp="$(mktemp -d)"
   trap 'rm -rf "$tmp"' EXIT
   for f in "llama-$build-bin-ubuntu-cuda-$LLAMA_CUDA-x64.tar.gz" \
@@ -26,6 +34,7 @@ else
   cp -a "$bindir"/. "$dest"/
   # cudart 的 .so 若落在其他目錄，也一併放進來
   find "$tmp/x" -name '*.so*' -not -path "$bindir/*" -exec cp -a {} "$dest"/ \;
+  echo "$LLAMA_CUDA" > "$dest/.cuda"
 fi
 
 ln -sfn "$build" "$LAB_DIR/vendor/llama.cpp/current"

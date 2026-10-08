@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # 測試 Codex 目前連線的 router（backend）是哪個
-# 用法：source env.sh && scripts/test-codex-router.sh
+# 用法：scripts/test-codex-router.sh（接 router 時可加 CODEX_MODEL=檔名，和 agent-test.sh 相同）
 
 set -euo pipefail
 source "$(dirname "$0")/../env.sh"
@@ -58,15 +58,17 @@ fi
 echo ""
 
 # 3. 實際發一個簡單 request 看回傳哪個 model
-# 取 router 實際可用的模型來測
+# 用 Codex 實際會送的模型名稱。不拿 /models 清單的第一個：router 模式下那可能是 FIM 或 GLM，
+# 而 --models-max 1 會因此把主模型卸載
 echo "[3] 實際呼叫測試（1 token 的 chat completion）"
-actual_model=$(curl -s "${auth[@]}" "$base_url/models" 2>/dev/null | python3 -c "
+actual_model="${CODEX_MODEL:-$model}"
+echo "  (用 Codex 的模型: $actual_model)"
+if [[ "$http_code" == "200" ]] && ! echo "$body" | python3 -c "
 import sys, json
-data = json.load(sys.stdin)
-print(data['data'][0]['id'] if data.get('data') else '')
-" 2>/dev/null)
-[[ -z "$actual_model" ]] && actual_model="$model"
-echo "  (用實際模型: $actual_model)"
+sys.exit(0 if sys.argv[1] in [m.get('id') for m in json.load(sys.stdin).get('data', [])] else 1)
+" "$actual_model" 2>/dev/null; then
+  echo "  ⚠️ $actual_model 不在伺服器的模型清單裡（router 模式要用檔名，見 README「每台機器要重建的狀態」）"
+fi
 
 chat_resp=$(curl -s -w "\n%{http_code}" -X POST "${auth[@]}" "$base_url/chat/completions" \
   -H "Content-Type: application/json" \
