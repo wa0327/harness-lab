@@ -1,0 +1,14 @@
+{
+    // 不進版控的大目錄與一直在變動的目錄，不讓 VS Code 監看：
+    // 檔案監看器遞迴掃描時遇到目錄被刪掉會整個失效（Git 面板就不會自動刷新），也比較省資源
+    "files.watcherExclude": {
+        "**/.home/**": true,
+        "**/.cache/**": true,
+        "**/models/**": true,
+        "**/vendor/**": true,
+        "**/logs/**": true,
+        "**/node_modules/**": true,
+        "**/.venv/**": true,
+        "**/__pycache__/**": true
+    }
+}
