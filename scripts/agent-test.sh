@@ -1,15 +1,16 @@
 #!/usr/bin/env bash
 # 用同一個題目測不同 harness：複製 evals/<題目> 到 logs/runs/<題目>/<harness>/<日期_時間>/，讓 harness 非互動解題，再自動驗證
-# 用法：scripts/agent-test.sh <題目> <pi|pi-router|codex|opencode|qwen>   需要先啟動 scripts/serve-main.sh
+# 用法：scripts/agent-test.sh <題目> <pi|pi-router|codex|opencode|qwen|claude>   需要先啟動 scripts/serve-main.sh（claude 除外）
 set -euo pipefail
 source "$(dirname "$0")/../env.sh"
 
-usage="用法：scripts/agent-test.sh <題目> <pi|pi-router|codex|opencode|qwen>，題目是 evals/ 下的目錄名稱"
+usage="用法：scripts/agent-test.sh <題目> <pi|pi-router|codex|opencode|qwen|claude>，題目是 evals/ 下的目錄名稱"
 task="${1:?$usage}"
 harness="${2:?$usage}"
 TIMEOUT="${TIMEOUT:-1800}"
 PI_THINKING="${PI_THINKING:-}"   # 例：PI_THINKING=off scripts/agent-test.sh fix-inventory pi
 CODEX_MODEL="${CODEX_MODEL:-}"   # 例：接 router 時 CODEX_MODEL=Qwen3.6-35B-A3B-UD-Q4_K_XL
+CLAUDE_MODEL=claude-opus-5-5     # claude 是上限標竿：固定用 Anthropic 的雲端模型，不走本地伺服器，不受 MODEL 影響
 
 task_dir="$LAB_DIR/evals/$task"
 [[ -d "$task_dir" ]] || { echo "沒有這個題目：evals/$task" >&2; exit 2; }
@@ -85,6 +86,13 @@ case "$harness" in
     # 沒有沙箱（-y 自動核准所有工具）；--chat-recording false 相當於 Pi 的 --no-session
     (cd "$work" && QWEN_CODE_SUPPRESS_YOLO_WARNING=1 timeout "$TIMEOUT" qwen -o stream-json -y --chat-recording false ${extra_dir:+--include-directories "$extra_dir"} -m "$MAIN_ALIAS" "$prompt") \
       > "$run/agent.jsonl" 2> "$run/agent.stderr" ;;
+  claude)
+    # 用家目錄裡的 Claude Code 和你的登入，不另外設定。--add-dir 可以接多個目錄，要放在其他選項前面，否則會把題目也吃掉；
+    # --strict-mcp-config 不載入帳號的 MCP connector（其他 harness 都沒有，而且會在最終回覆提醒授權）；
+    # 沒有 stdin 時它會等 3 秒，所以接 /dev/null
+    (cd "$work" && timeout "$TIMEOUT" claude -p ${extra_dir:+--add-dir "$extra_dir"} --output-format stream-json --verbose --model "$CLAUDE_MODEL" \
+        --permission-mode bypassPermissions --no-session-persistence --strict-mcp-config "$prompt" < /dev/null) \
+      > "$run/agent.jsonl" 2> "$run/agent.stderr" ;;
   *) echo "未知的 harness：$harness" >&2; exit 2 ;;
 esac
 agent_exit=$?
@@ -122,10 +130,11 @@ if [[ -n "$new_files" ]]; then
   echo "$new_files" >&2
 fi
 label="$harness${PI_THINKING:+ (thinking=$PI_THINKING)}${CODEX_MODEL:+ (router)}"
-[[ "$MODEL" == qwen ]] || label="$label [$MAIN_ALIAS]"   # 預設模型不加，和舊紀錄的標籤一致
+model="$MAIN_ALIAS"; [[ "$harness" != claude ]] || model="$CLAUDE_MODEL"
+[[ "$MODEL" == qwen || "$harness" == claude ]] || label="$label [$MAIN_ALIAS]"   # 預設模型不加，和舊紀錄的標籤一致
 
 python3 -I -c 'import json,sys; k=["harness","label","task","secs","agent_exit","verdict","tests","model"]; json.dump(dict(zip(k,sys.argv[2:])),open(sys.argv[1],"w"),ensure_ascii=False,indent=2)' \
-  "$run/meta.json" "$harness" "$label" "$task" "$secs" "$agent_exit" "$verdict" "$tests_ok" "$MAIN_ALIAS"
+  "$run/meta.json" "$harness" "$label" "$task" "$secs" "$agent_exit" "$verdict" "$tests_ok" "$model"
 
 log="$LOG_DIR/agent-runs.md"
 [[ -f "$log" ]] || printf '| 時間 | harness | 題目 | 秒數 | agent 結束碼 | 結果 | 測試檔 | 驗證輸出 | 紀錄 |\n|---|---|---|---|---|---|---|---|---|\n' > "$log"

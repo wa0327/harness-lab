@@ -142,7 +142,38 @@ def parse_qwen(events):
     return m
 
 
-PARSERS = {"codex": parse_codex, "opencode": parse_opencode, "qwen": parse_qwen}
+def parse_claude(events):
+    m = {"requests": 0, "prompt": 0, "cached": 0, "output": 0, "reasoning": 0,
+         "thinking_chars": 0, "tools": Counter(), "tool_errors": 0, "final": "", "cost": None}
+    ids = set()
+    for e in events:
+        if e.get("type") == "assistant":
+            msg = e.get("message") or {}
+            # 同一則回應拆成多個 assistant 事件（每個內容區塊一個），id 相同，各自帶同一份 usage
+            ids.add(msg.get("id"))
+            for block in msg.get("content") or []:
+                if block.get("type") == "thinking":
+                    m["thinking_chars"] += len(block.get("thinking") or "")
+                elif block.get("type") == "tool_use":
+                    m["tools"][block.get("name", "?")] += 1
+        elif e.get("type") == "user":
+            for block in (e.get("message") or {}).get("content") or []:
+                if isinstance(block, dict) and block.get("type") == "tool_result":
+                    m["tool_errors"] += bool(block.get("is_error"))
+        elif e.get("type") == "result":
+            # token 取 result 的總計；modelUsage 依模型分開，含子 agent 和背景的小模型
+            for u in (e.get("modelUsage") or {}).values():
+                m["prompt"] += u.get("inputTokens", 0) + u.get("cacheReadInputTokens", 0) + u.get("cacheCreationInputTokens", 0)
+                m["cached"] += u.get("cacheReadInputTokens", 0)
+                m["output"] += u.get("outputTokens", 0)
+                m["reasoning"] += u.get("thinkingTokens", 0)
+            m["cost"] = e.get("total_cost_usd")
+            m["final"] = e.get("result") or m["final"]
+    m["requests"] = len(ids)
+    return m
+
+
+PARSERS = {"codex": parse_codex, "opencode": parse_opencode, "qwen": parse_qwen, "claude": parse_claude}
 
 
 def load_run(run):
@@ -189,14 +220,16 @@ def table_rows(runs):
         ("工具呼叫次數", [sum(m["tools"].values()) if m else None for m in ms]),
         ("  明細", [", ".join(f"{k}×{v}" for k, v in m["tools"].most_common()) if m else None for m in ms]),
         ("  結束碼非 0", [m.get("tool_errors") for m in ms]),
+        ("費用 (USD)", [f"{m['cost']:.2f}" if m.get("cost") is not None else None for m in ms]),
     ]
 
 
 NOTES = [
     "送出 prompt 總量：Pi = input + cacheRead；OpenCode = input + cache.read + cache.write；"
-    "Codex、Qwen Code = input_tokens（已含快取）。",
+    "Codex、Qwen Code = input_tokens（已含快取）；Claude Code = input + cache read + cache creation（含子 agent）。",
     "模型回應次數：Codex 不回報，以它每次回應前說的話（agent_message）估算，標 ≈。",
-    "思考：llama.cpp 不回報思考 token 數；Codex 經 Responses API 拿不到思考內容，所以顯示 —。",
+    "思考：llama.cpp 不回報思考 token 數；Codex 經 Responses API、Claude Code（Opus）都拿不到思考內容，所以顯示 —。",
+    "費用：只有 Claude Code（雲端模型，固定 Opus 5.5 當上限標竿）有，依 Anthropic 牌價計算；本地模型不計費。",
     "結束碼非 0：多半是第一次跑測試時測試失敗，題目本來就有 bug，屬預期。",
 ]
 
