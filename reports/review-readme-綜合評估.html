@@ -70,10 +70,11 @@ h3 { font-size: 16px; margin: 24px 0 8px; }
 code { font: 13px ui-monospace, SFMono-Regular, Menlo, monospace; background: var(--code-bg); padding: 1px 5px; border-radius: 4px; overflow-wrap: anywhere; }
 .card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 16px 18px; }
 .card.bench { border-color: var(--s1); }
+.grid4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
 .grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
 .grid2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
-@media (max-width: 820px) { .grid3 { grid-template-columns: repeat(2, 1fr); } .grid2 { grid-template-columns: 1fr; } }
-@media (max-width: 480px) { .grid3 { grid-template-columns: 1fr; } }
+@media (max-width: 820px) { .grid4, .grid3 { grid-template-columns: repeat(2, 1fr); } .grid2 { grid-template-columns: 1fr; } }
+@media (max-width: 480px) { .grid4, .grid3 { grid-template-columns: 1fr; } }
 .rank { font-size: 13px; color: var(--muted); }
 .name { font-size: 18px; font-weight: 600; margin: 2px 0; }
 .score { font-size: 34px; font-weight: 600; line-height: 1.1; }
@@ -99,7 +100,7 @@ td.c, th.c { text-align: center; white-space: nowrap; }
 .err .dot { background: var(--bad); }
 .chart h3 { margin: 0 0 2px; font-size: 15px; }
 .chart .note { color: var(--muted); font-size: 12px; margin: 0 0 10px; }
-.bar-row { display: grid; grid-template-columns: 84px 1fr; align-items: center; gap: 8px; margin: 6px 0; }
+.bar-row { display: grid; grid-template-columns: 100px 1fr; align-items: center; gap: 8px; margin: 6px 0; }
 .bar-row .lab { color: var(--ink-2); font-size: 13px; white-space: nowrap; }
 .track { position: relative; height: 20px; }
 .bar { height: 20px; background: var(--s1); border-radius: 0 4px 4px 0; min-width: 2px; }
@@ -123,140 +124,156 @@ ul.tight li { margin: 4px 0; }
 <main>
 
 <h1>review-readme 綜合評估</h1>
-<p class="sub">題目：審查 harness-lab README（快照 <code>9bcdf76</code>，280 行），寫成 <code>output/README-review.md</code>。每位考生只取最新一次執行，依大腦分組：本地組（Codex、OpenCode、Pi、Qwen Code，本地模型 qwen3.6-35b-a3b）與上限標竿（Claude Code，雲端的 claude-opus-5-5）。ds4 組（DeepSeek V4 Flash）待跑完後補上。評估日期 2026-10-08。</p>
+<p class="sub">題目：審查 harness-lab README（快照 <code>9bcdf76</code>，280 行），寫成 <code>output/README-review.md</code>。每位考生只取最新一次執行，依大腦分成三組：本地組（Codex、OpenCode、Pi、Qwen Code，本地模型 qwen3.6-35b-a3b）、ds4 組（Codex、Pi，遠端的 DeepSeek V4 Flash）與上限標竿（Claude Code，雲端的 claude-opus-5-5）。評估日期 2026-10-08。</p>
 
 <div class="callout">
-  <b>測試條件</b>（五位相同）：題目快照放在 <code>/tmp/agent-snapshots/</code>；產出寫在快照裡的 <code>output/</code>，跑完再複製回 run 目錄，harness 不加任何額外的可寫目錄。本地組的伺服器 context 是 128K，四位的請求都經 <code>scripts/logproxy.py</code> 記錄，存在各 run 目錄的 <code>requests/</code>。
+  <b>測試條件</b>（七位相同）：題目快照放在 <code>/tmp/agent-snapshots/</code>；產出寫在快照裡的 <code>output/</code>，跑完再複製回 run 目錄，harness 不加任何額外的可寫目錄。本地組的伺服器 context 是 128K，四位的請求都經 <code>scripts/logproxy.py</code> 記錄，存在各 run 目錄的 <code>requests/</code>。ds4 組連到 KK 的 Mac（M5 Max）上的 deepseek-v4-flash（284B MoE，Q2 量化，ds4.c），經 Tailscale 連線，這台主機按需開機、多人共用。ds4 組的請求沒有經 logproxy 記錄；執行時間也受遠端主機的負載影響，不能和本地組直接比較。
 </div>
 <div class="callout">
-  <b>利益揭露：</b>撰寫這份評估的主考官也是 Claude Opus 5.5，和 Claude Code 考生是同一個模型。為了避免偏袒，Claude 報告裡每一條我列為「成立」的說法，都對照過快照原始檔，它漏掉的項目也照樣列出。另外，Claude 用的模型不同，它的分數只能當作參考上限，不和本地組一起排名。
+  <b>利益揭露：</b>撰寫這份評估的主考官也是 Claude Opus 5.5，和 Claude Code 考生是同一個模型。為了避免偏袒，Claude 報告裡每一條我列為「成立」的說法，都對照過快照原始檔，它漏掉的項目也照樣列出。另外，三組用的模型不同，所以只在組內排名；Claude 的分數只當作參考上限。
 </div>
 <div class="callout bad">
   <b>排名請保守看待。</b>這是每位考生單次執行的結果。本地模型的取樣溫度是 1.0，同一個 harness 每次走的路都可能不同。要比較 harness 本身，每位考生至少要跑 3 次再取平均。
 </div>
 
 <h3>本地組（qwen3.6-35b-a3b）</h3>
-<div class="grid3">
+<div class="grid4">
   <div class="card"><div class="rank">第 1 名</div><div class="name">Codex</div><div class="score">57<small> / 100</small></div><div class="verdict">最務實：11 條建議短而具體，抓到 test-codex-router、<code>.vscode</code> 和停止伺服器。有 2 條錯誤，其中一條說 README 缺的表格其實早就有了。</div></div>
   <div class="card"><div class="rank">第 2 名</div><div class="name">Qwen Code</div><div class="score">51<small> / 100</small></div><div class="verdict">待在快照內、讀了腳本和設定，覆蓋是本地組最高。但把「evals/ 完全空白」列為高優先，這是錯的。</div></div>
   <div class="card"><div class="rank">第 3 名</div><div class="name">OpenCode</div><div class="score">50<small> / 100</small></div><div class="verdict">錯誤最少（1 條），但 22 條裡多半是通用建議，最高優先是「補 License」，真正針對這個專案的問題只抓到 test-codex-router。</div></div>
   <div class="card"><div class="rank">第 4 名</div><div class="name">Pi</div><div class="score">46<small> / 100</small></div><div class="verdict">只用 3 次工具呼叫，產出一份範本化的審查（License、CHANGELOG、貢獻指南、FAQ…），還編造了不存在的參數 <code>--ctx-l-len</code>。</div></div>
-  <div class="card bench"><div class="rank">上限標竿（雲端模型）</div><div class="name">Claude Code</div><div class="score">80<small> / 100</small></div><div class="verdict">29 條建議沒有一條錯，找到的真問題遠多於本地組，每條都附原始碼行號。花費 1.12 美元，篇幅是其他人的 2–4 倍。</div></div>
+</div>
+
+<h3>ds4 組（deepseek-v4-flash）與上限標竿</h3>
+<div class="grid3">
+  <div class="card"><div class="rank">ds4 組第 1 名</div><div class="name">Codex（ds4）</div><div class="score">60<small> / 100</small></div><div class="verdict">兩個開源模型組裡覆蓋最高：抓到 36 對 38 會 OOM、Qwen Code 一節沒寫思考，這兩條除了 Claude 只有它抓到。錯誤 1 條（把 <code>--fit off</code> 解釋成省 VRAM）。花了 809 秒、489K token。</div></div>
+  <div class="card"><div class="rank">ds4 組第 2 名</div><div class="name">Pi（ds4）</div><div class="score">56<small> / 100</small></div><div class="verdict">讀了腳本、設定和實測報告，是唯一完整抓到「router 不適合跑 FIM」的考生。錯誤 2 條：把題目的輸出目錄 <code>output/</code> 當成專案內容，又說 README 沒寫 <code>CODEX_MODEL</code>。</div></div>
+  <div class="card bench"><div class="rank">上限標竿（雲端模型）</div><div class="name">Claude Code</div><div class="score">80<small> / 100</small></div><div class="verdict">29 條建議沒有一條錯，找到的真問題遠多於其他考生，每條都附原始碼行號。花費 1.12 美元，篇幅是其他人的 2–4 倍。</div></div>
 </div>
 
 <h2>評分總表</h2>
 <div class="tablewrap">
 <table>
-  <thead><tr><th>面向（配分）</th><th class="num">Codex</th><th class="num">Qwen Code</th><th class="num">OpenCode</th><th class="num">Pi</th><th class="num">Claude（標竿）</th></tr></thead>
+  <thead><tr><th>面向（配分）</th><th class="num">Codex</th><th class="num">Qwen Code</th><th class="num">OpenCode</th><th class="num">Pi</th><th class="num">Codex（ds4）</th><th class="num">Pi（ds4）</th><th class="num">Claude（標竿）</th></tr></thead>
   <tbody>
-    <tr><td>正確性：建議是否成立、有無錯誤或有害建議（30）</td><td class="num">19</td><td class="num">15</td><td class="num">18</td><td class="num">12</td><td class="num">28</td></tr>
-    <tr><td>關鍵問題覆蓋：30 × 加權命中 ÷ 28（30）</td><td class="num">4</td><td class="num">5</td><td class="num">2</td><td class="num">1</td><td class="num">21</td></tr>
-    <tr><td>範圍與流程紀律：在快照內工作、產出寫到指定位置（15）</td><td class="num">15</td><td class="num">15</td><td class="num">15</td><td class="num">15</td><td class="num">15</td></tr>
-    <tr><td>效率：時間、token、費用（15）</td><td class="num">12</td><td class="num">11</td><td class="num">11</td><td class="num">15</td><td class="num">7</td></tr>
-    <tr><td>報告可用性：優先順序、可直接動手的建議、篇幅（10）</td><td class="num">7</td><td class="num">5</td><td class="num">4</td><td class="num">3</td><td class="num">9</td></tr>
-    <tr><th>總分</th><th class="num">57</th><th class="num">51</th><th class="num">50</th><th class="num">46</th><th class="num">80</th></tr>
+    <tr><td>正確性：建議是否成立、有無錯誤或有害建議（30）</td><td class="num">19</td><td class="num">15</td><td class="num">18</td><td class="num">12</td><td class="num">22</td><td class="num">20</td><td class="num">28</td></tr>
+    <tr><td>關鍵問題覆蓋：30 × 加權命中 ÷ 28（30）</td><td class="num">4</td><td class="num">5</td><td class="num">2</td><td class="num">1</td><td class="num">10</td><td class="num">6</td><td class="num">21</td></tr>
+    <tr><td>範圍與流程紀律：在快照內工作、產出寫到指定位置（15）</td><td class="num">15</td><td class="num">15</td><td class="num">15</td><td class="num">15</td><td class="num">15</td><td class="num">15</td><td class="num">15</td></tr>
+    <tr><td>效率：時間、token、費用（15）</td><td class="num">12</td><td class="num">11</td><td class="num">11</td><td class="num">15</td><td class="num">6</td><td class="num">9</td><td class="num">7</td></tr>
+    <tr><td>報告可用性：優先順序、可直接動手的建議、篇幅（10）</td><td class="num">7</td><td class="num">5</td><td class="num">4</td><td class="num">3</td><td class="num">7</td><td class="num">6</td><td class="num">9</td></tr>
+    <tr><th>總分</th><th class="num">57</th><th class="num">51</th><th class="num">50</th><th class="num">46</th><th class="num">60</th><th class="num">56</th><th class="num">80</th></tr>
   </tbody>
 </table>
 </div>
-<p class="small">五位都待在快照內，紀律都滿分；本地組彼此的差距主要來自正確性和報告可用性。本地組的覆蓋分數只有 1–5 分，和 Claude 的 21 分差距很大。</p>
+<p class="small">七位都待在快照內，紀律都滿分。本地組彼此的差距主要來自正確性和報告可用性，覆蓋只有 1–5 分。ds4 組的覆蓋有 6–10 分，正確性也比本地組高，但覆蓋還不到 Claude（21 分）的一半。ds4 組的效率分數低，是因為在遠端主機上跑了 9–14 分鐘；Codex（ds4）送出的 token 也是七位裡最多的。</p>
 
 <h2>資源用量</h2>
 <div class="grid2">
   <div class="card chart">
     <h3>執行時間（秒）</h3>
-    <p class="note">越短越好。Claude 跑在雲端，和本地推論速度不能直接比</p>
-    <div class="bar-row" title="Pi：104 秒"><span class="lab">Pi</span><div class="track"><div class="bar" style="width:46.8%"></div><span class="val" style="left:46.8%">104</span></div></div>
-    <div class="bar-row" title="Codex：126 秒"><span class="lab">Codex</span><div class="track"><div class="bar" style="width:56.7%"></div><span class="val" style="left:56.7%">126</span></div></div>
-    <div class="bar-row" title="Qwen Code：138 秒"><span class="lab">Qwen Code</span><div class="track"><div class="bar" style="width:62.1%"></div><span class="val" style="left:62.1%">138</span></div></div>
-    <div class="bar-row" title="OpenCode：151 秒"><span class="lab">OpenCode</span><div class="track"><div class="bar" style="width:67.9%"></div><span class="val" style="left:67.9%">151</span></div></div>
-    <div class="bar-row" title="Claude：189 秒（雲端）"><span class="lab">Claude</span><div class="track"><div class="bar" style="width:85%"></div><span class="val" style="left:85%">189</span></div></div>
+    <p class="note">越短越好。ds4 跑在多人共用的遠端主機上，Claude 跑在雲端，都不能和本地推論速度直接比</p>
+    <div class="bar-row" title="Pi：104 秒"><span class="lab">Pi</span><div class="track"><div class="bar" style="width:10.9%"></div><span class="val" style="left:10.9%">104</span></div></div>
+    <div class="bar-row" title="Codex：126 秒"><span class="lab">Codex</span><div class="track"><div class="bar" style="width:13.2%"></div><span class="val" style="left:13.2%">126</span></div></div>
+    <div class="bar-row" title="Qwen Code：138 秒"><span class="lab">Qwen Code</span><div class="track"><div class="bar" style="width:14.5%"></div><span class="val" style="left:14.5%">138</span></div></div>
+    <div class="bar-row" title="OpenCode：151 秒"><span class="lab">OpenCode</span><div class="track"><div class="bar" style="width:15.9%"></div><span class="val" style="left:15.9%">151</span></div></div>
+    <div class="bar-row" title="Claude：189 秒（雲端）"><span class="lab">Claude</span><div class="track"><div class="bar" style="width:19.9%"></div><span class="val" style="left:19.9%">189</span></div></div>
+    <div class="bar-row" title="Pi（ds4）：535 秒（遠端）"><span class="lab">Pi（ds4）</span><div class="track"><div class="bar" style="width:56.2%"></div><span class="val" style="left:56.2%">535</span></div></div>
+    <div class="bar-row" title="Codex（ds4）：809 秒（遠端）"><span class="lab">Codex（ds4）</span><div class="track"><div class="bar" style="width:85%"></div><span class="val" style="left:85%">809</span></div></div>
   </div>
   <div class="card chart">
     <h3>送出 prompt 總量（千 token）</h3>
     <p class="note">含快取命中</p>
-    <div class="bar-row" title="Pi：30,020 token"><span class="lab">Pi</span><div class="track"><div class="bar" style="width:6%"></div><span class="val" style="left:6%">30.0K</span></div></div>
-    <div class="bar-row" title="Codex：104,441 token"><span class="lab">Codex</span><div class="track"><div class="bar" style="width:20.7%"></div><span class="val" style="left:20.7%">104.4K</span></div></div>
-    <div class="bar-row" title="OpenCode：121,746 token"><span class="lab">OpenCode</span><div class="track"><div class="bar" style="width:24.2%"></div><span class="val" style="left:24.2%">121.7K</span></div></div>
-    <div class="bar-row" title="Qwen Code：156,989 token"><span class="lab">Qwen Code</span><div class="track"><div class="bar" style="width:31.2%"></div><span class="val" style="left:31.2%">157.0K</span></div></div>
-    <div class="bar-row" title="Claude：427,664 token，費用 1.12 美元"><span class="lab">Claude</span><div class="track"><div class="bar" style="width:85%"></div><span class="val" style="left:85%">427.7K</span></div></div>
+    <div class="bar-row" title="Pi：30,020 token"><span class="lab">Pi</span><div class="track"><div class="bar" style="width:5.2%"></div><span class="val" style="left:5.2%">30.0K</span></div></div>
+    <div class="bar-row" title="Codex：104,441 token"><span class="lab">Codex</span><div class="track"><div class="bar" style="width:18.2%"></div><span class="val" style="left:18.2%">104.4K</span></div></div>
+    <div class="bar-row" title="Pi（ds4）：119,555 token"><span class="lab">Pi（ds4）</span><div class="track"><div class="bar" style="width:20.8%"></div><span class="val" style="left:20.8%">119.6K</span></div></div>
+    <div class="bar-row" title="OpenCode：121,746 token"><span class="lab">OpenCode</span><div class="track"><div class="bar" style="width:21.2%"></div><span class="val" style="left:21.2%">121.7K</span></div></div>
+    <div class="bar-row" title="Qwen Code：156,989 token"><span class="lab">Qwen Code</span><div class="track"><div class="bar" style="width:27.3%"></div><span class="val" style="left:27.3%">157.0K</span></div></div>
+    <div class="bar-row" title="Claude：427,664 token，費用 1.12 美元"><span class="lab">Claude</span><div class="track"><div class="bar" style="width:74.4%"></div><span class="val" style="left:74.4%">427.7K</span></div></div>
+    <div class="bar-row" title="Codex（ds4）：488,888 token"><span class="lab">Codex（ds4）</span><div class="track"><div class="bar" style="width:85%"></div><span class="val" style="left:85%">488.9K</span></div></div>
   </div>
   <div class="card chart">
     <h3>生成量（千 token）</h3>
-    <p class="note">Claude 含思考 6.6K</p>
+    <p class="note">Claude 含思考 6.6K；ds4 組另外輸出了思考內容（Pi 14K 字元、Codex 22K 字元）</p>
     <div class="bar-row" title="Pi：3,766 token"><span class="lab">Pi</span><div class="track"><div class="bar" style="width:17.8%"></div><span class="val" style="left:17.8%">3.8K</span></div></div>
     <div class="bar-row" title="OpenCode：3,804 token"><span class="lab">OpenCode</span><div class="track"><div class="bar" style="width:17.9%"></div><span class="val" style="left:17.9%">3.8K</span></div></div>
     <div class="bar-row" title="Codex：4,345 token"><span class="lab">Codex</span><div class="track"><div class="bar" style="width:20.5%"></div><span class="val" style="left:20.5%">4.3K</span></div></div>
     <div class="bar-row" title="Qwen Code：4,491 token"><span class="lab">Qwen Code</span><div class="track"><div class="bar" style="width:21.2%"></div><span class="val" style="left:21.2%">4.5K</span></div></div>
+    <div class="bar-row" title="Pi（ds4）：8,440 token"><span class="lab">Pi（ds4）</span><div class="track"><div class="bar" style="width:39.8%"></div><span class="val" style="left:39.8%">8.4K</span></div></div>
+    <div class="bar-row" title="Codex（ds4）：12,787 token"><span class="lab">Codex（ds4）</span><div class="track"><div class="bar" style="width:60.3%"></div><span class="val" style="left:60.3%">12.8K</span></div></div>
     <div class="bar-row" title="Claude：18,032 token（思考 6,617）"><span class="lab">Claude</span><div class="track"><div class="bar" style="width:85%"></div><span class="val" style="left:85%">18.0K</span></div></div>
   </div>
   <div class="card chart">
     <h3>工具呼叫次數</h3>
-    <p class="note">Pi 只讀了 README、跑了一次 bash 就寫報告</p>
-    <div class="bar-row" title="Pi：3 次（read×1、bash×1、write×1）"><span class="lab">Pi</span><div class="track"><div class="bar" style="width:19.6%"></div><span class="val" style="left:19.6%">3</span></div></div>
-    <div class="bar-row" title="Claude：6 次（Bash×4、Read×1、Write×1），一次 Bash 就 cat 完全部腳本"><span class="lab">Claude</span><div class="track"><div class="bar" style="width:39.2%"></div><span class="val" style="left:39.2%">6</span></div></div>
-    <div class="bar-row" title="OpenCode：10 次（read×7、bash×2、write×1）"><span class="lab">OpenCode</span><div class="track"><div class="bar" style="width:65.4%"></div><span class="val" style="left:65.4%">10</span></div></div>
-    <div class="bar-row" title="Codex：11 次 shell 指令"><span class="lab">Codex</span><div class="track"><div class="bar" style="width:71.9%"></div><span class="val" style="left:71.9%">11</span></div></div>
-    <div class="bar-row" title="Qwen Code：13 次（glob×6、read_file×5、list_agents×1、write_file×1）"><span class="lab">Qwen Code</span><div class="track"><div class="bar" style="width:85%"></div><span class="val" style="left:85%">13</span></div></div>
+    <p class="note">本地組的 Pi 只讀了 README、跑了一次 bash 就寫報告</p>
+    <div class="bar-row" title="Pi：3 次（read×1、bash×1、write×1）"><span class="lab">Pi</span><div class="track"><div class="bar" style="width:13.4%"></div><span class="val" style="left:13.4%">3</span></div></div>
+    <div class="bar-row" title="Claude：6 次（Bash×4、Read×1、Write×1），一次 Bash 就 cat 完全部腳本"><span class="lab">Claude</span><div class="track"><div class="bar" style="width:26.8%"></div><span class="val" style="left:26.8%">6</span></div></div>
+    <div class="bar-row" title="OpenCode：10 次（read×7、bash×2、write×1）"><span class="lab">OpenCode</span><div class="track"><div class="bar" style="width:44.7%"></div><span class="val" style="left:44.7%">10</span></div></div>
+    <div class="bar-row" title="Codex：11 次 shell 指令"><span class="lab">Codex</span><div class="track"><div class="bar" style="width:49.2%"></div><span class="val" style="left:49.2%">11</span></div></div>
+    <div class="bar-row" title="Pi（ds4）：11 次（bash×9、read×1、write×1）"><span class="lab">Pi（ds4）</span><div class="track"><div class="bar" style="width:49.2%"></div><span class="val" style="left:49.2%">11</span></div></div>
+    <div class="bar-row" title="Qwen Code：13 次（glob×6、read_file×5、list_agents×1、write_file×1）"><span class="lab">Qwen Code</span><div class="track"><div class="bar" style="width:58.2%"></div><span class="val" style="left:58.2%">13</span></div></div>
+    <div class="bar-row" title="Codex（ds4）：19 次 shell 指令"><span class="lab">Codex（ds4）</span><div class="track"><div class="bar" style="width:85%"></div><span class="val" style="left:85%">19</span></div></div>
   </div>
 </div>
 
 <div class="tablewrap" style="margin-top:12px">
 <table>
-  <thead><tr><th>指標</th><th class="num">Codex</th><th class="num">Qwen Code</th><th class="num">OpenCode</th><th class="num">Pi</th><th class="num">Claude</th></tr></thead>
+  <thead><tr><th>指標</th><th class="num">Codex</th><th class="num">Qwen Code</th><th class="num">OpenCode</th><th class="num">Pi</th><th class="num">Codex（ds4）</th><th class="num">Pi（ds4）</th><th class="num">Claude</th></tr></thead>
   <tbody>
-    <tr><td>模型</td><td class="num" colspan="4" style="text-align:center">qwen3.6-35b-a3b（本地，CTX 128K）</td><td class="num">claude-opus-5-5</td></tr>
-    <tr><td>執行目錄</td><td class="num"><code>20261008_150207</code></td><td class="num"><code>20261008_144554</code></td><td class="num"><code>20261008_145842</code></td><td class="num"><code>20261008_145513</code></td><td class="num"><code>20261008_153209</code></td></tr>
-    <tr><td>秒數</td><td class="num">126</td><td class="num">138</td><td class="num">151</td><td class="num">104</td><td class="num">189</td></tr>
-    <tr><td>模型回應次數</td><td class="num">≈5</td><td class="num">6</td><td class="num">6</td><td class="num">4</td><td class="num">7</td></tr>
-    <tr><td>送出 prompt（tok）</td><td class="num">104,441</td><td class="num">156,989</td><td class="num">121,746</td><td class="num">30,020</td><td class="num">427,664</td></tr>
-    <tr><td>其中快取命中</td><td class="num">96,146</td><td class="num">149,074</td><td class="num">108,363</td><td class="num">21,076</td><td class="num">340,224</td></tr>
-    <tr><td>生成（tok）</td><td class="num">4,345</td><td class="num">4,491</td><td class="num">3,804</td><td class="num">3,766</td><td class="num">18,032</td></tr>
-    <tr><td>工具呼叫</td><td class="num">11</td><td class="num">13</td><td class="num">10</td><td class="num">3</td><td class="num">6</td></tr>
-    <tr><td>碰到快照外的路徑</td><td class="num">0</td><td class="num">0</td><td class="num">0</td><td class="num">0</td><td class="num">0</td></tr>
-    <tr><td>費用</td><td class="num">—</td><td class="num">—</td><td class="num">—</td><td class="num">—</td><td class="num">US$1.12</td></tr>
+    <tr><td>模型</td><td class="num" colspan="4" style="text-align:center">qwen3.6-35b-a3b（本地，CTX 128K）</td><td class="num" colspan="2" style="text-align:center">deepseek-v4-flash（遠端 ds4）</td><td class="num">claude-opus-5-5</td></tr>
+    <tr><td>執行目錄</td><td class="num"><code>20261008_150207</code></td><td class="num"><code>20261008_144554</code></td><td class="num"><code>20261008_145842</code></td><td class="num"><code>20261008_145513</code></td><td class="num"><code>20261008_163329</code></td><td class="num"><code>20261008_162325</code></td><td class="num"><code>20261008_153209</code></td></tr>
+    <tr><td>秒數</td><td class="num">126</td><td class="num">138</td><td class="num">151</td><td class="num">104</td><td class="num">809</td><td class="num">535</td><td class="num">189</td></tr>
+    <tr><td>模型回應次數</td><td class="num">≈5</td><td class="num">6</td><td class="num">6</td><td class="num">4</td><td class="num">≈11</td><td class="num">8</td><td class="num">7</td></tr>
+    <tr><td>送出 prompt（tok）</td><td class="num">104,441</td><td class="num">156,989</td><td class="num">121,746</td><td class="num">30,020</td><td class="num">488,888</td><td class="num">119,555</td><td class="num">427,664</td></tr>
+    <tr><td>其中快取命中</td><td class="num">96,146</td><td class="num">149,074</td><td class="num">108,363</td><td class="num">21,076</td><td class="num">451,064</td><td class="num">119,555</td><td class="num">340,224</td></tr>
+    <tr><td>生成（tok）</td><td class="num">4,345</td><td class="num">4,491</td><td class="num">3,804</td><td class="num">3,766</td><td class="num">12,787</td><td class="num">8,440</td><td class="num">18,032</td></tr>
+    <tr><td>工具呼叫</td><td class="num">11</td><td class="num">13</td><td class="num">10</td><td class="num">3</td><td class="num">19</td><td class="num">11</td><td class="num">6</td></tr>
+    <tr><td>碰到快照外的路徑</td><td class="num">0</td><td class="num">0</td><td class="num">0</td><td class="num">0</td><td class="num">0</td><td class="num">0</td><td class="num">0</td></tr>
+    <tr><td>費用</td><td class="num">—</td><td class="num">—</td><td class="num">—</td><td class="num">—</td><td class="num">—</td><td class="num">—</td><td class="num">US$1.12</td></tr>
   </tbody>
 </table>
 </div>
-<p class="small">資料來源：<code>scripts/compare-runs.py</code> 與各 run 的 <code>agent.jsonl</code>。這一輪沒有人用子 agent，所以數字都是完整的。Codex 的回應次數是估計值。</p>
+<p class="small">資料來源：<code>scripts/compare-runs.py</code> 與各 run 的 <code>agent.jsonl</code>。這一輪沒有人用子 agent，所以數字都是完整的。兩位 Codex 的回應次數都是估計值。</p>
 
 <h2>建議的品質</h2>
 <div class="card chart">
   <h3>每份報告的建議條數，按品質分類</h3>
   <div class="legend"><span><i style="background:var(--s1)"></i>成立且有用</span><span><i style="background:var(--s-low)"></i>成立但價值低（泛泛、風格、湊數）</span><span><i style="background:var(--bad)"></i>錯誤、捏造或離題</span></div>
   <div class="bar-row" title="Claude：29 條 = 有用 21、低價值 8、錯誤 0"><span class="lab">Claude</span><div class="stack" style="width:100%"><span class="seg-good" style="flex:21">21</span><span class="seg-low" style="flex:8">8</span></div></div>
+  <div class="bar-row" title="Codex（ds4）：15 條 = 有用 5、低價值 9、錯誤 1"><span class="lab">Codex（ds4）</span><div class="stack" style="width:51.7%"><span class="seg-good" style="flex:5">5</span><span class="seg-low" style="flex:9">9</span><span class="seg-bad" style="flex:1">1</span></div></div>
+  <div class="bar-row" title="Pi（ds4）：17 條 = 有用 5、低價值 10、錯誤 2"><span class="lab">Pi（ds4）</span><div class="stack" style="width:58.6%"><span class="seg-good" style="flex:5">5</span><span class="seg-low" style="flex:10">10</span><span class="seg-bad" style="flex:2">2</span></div></div>
   <div class="bar-row" title="Codex：11 條 = 有用 3、低價值 6、錯誤 2"><span class="lab">Codex</span><div class="stack" style="width:37.9%"><span class="seg-good" style="flex:3">3</span><span class="seg-low" style="flex:6">6</span><span class="seg-bad" style="flex:2">2</span></div></div>
   <div class="bar-row" title="Qwen Code：11 條 = 有用 3、低價值 6、錯誤 2"><span class="lab">Qwen Code</span><div class="stack" style="width:37.9%"><span class="seg-good" style="flex:3">3</span><span class="seg-low" style="flex:6">6</span><span class="seg-bad" style="flex:2">2</span></div></div>
   <div class="bar-row" title="OpenCode：22 條 = 有用 4、低價值 17、錯誤 1"><span class="lab">OpenCode</span><div class="stack" style="width:75.9%"><span class="seg-good" style="flex:4">4</span><span class="seg-low" style="flex:17">17</span><span class="seg-bad" style="flex:1">1</span></div></div>
   <div class="bar-row" title="Pi：24 條 = 有用 3、低價值 18、錯誤 3"><span class="lab">Pi</span><div class="stack" style="width:82.8%"><span class="seg-good" style="flex:3">3</span><span class="seg-low" style="flex:18">18</span><span class="seg-bad" style="flex:3">3</span></div></div>
 </div>
-<p class="small">本地組有用的建議都只有 3–4 條。OpenCode 和 Pi 的低價值項目特別多，因為它們寫的是放到任何專案都適用的通用清單（License、CHANGELOG、貢獻指南、FAQ、架構圖）。Claude 的 29 條分 A（照做會失敗）、B（缺漏）、C（結構）三級，抽查的具體說法全部屬實。</p>
+<p class="small">本地組有用的建議都只有 3–4 條。OpenCode 和 Pi 的低價值項目特別多，因為它們寫的是放到任何專案都適用的通用清單（License、CHANGELOG、貢獻指南、FAQ、架構圖）。ds4 組各有 5 條有用的建議，低價值的項目不是通用清單，而是很瑣碎的細節：範本裡的自動更新與遙測開關、腳本內部用的旗標、舊版設定遷移。Codex（ds4）第 1 條把腳本數量算錯，但「漏了 test-codex-router」的結論成立，仍算有用。Claude 的 29 條分 A（照做會失敗）、B（缺漏）、C（結構）三級，抽查的具體說法全部屬實。</p>
 
 <h2>答案表：README 裡真正的問題</h2>
 <p>第 1–10 條是我在看任何考生報告之前，獨立審查快照並交叉比對 <code>env.sh</code>、腳本和 <code>reports/</code> 整理出來的。第 11–15 條是 Claude 考生提出、經主考官對照原始碼確認後加入的問題；其他考生如果也提到，一樣給分。加權方式：高 3 分、中 2 分、低 1 分，滿分 28，「部分」算一半。</p>
 <div class="tablewrap">
 <table>
-  <thead><tr><th>#</th><th>問題</th><th>嚴重度</th><th class="c">Codex</th><th class="c">Qwen</th><th class="c">OpenCode</th><th class="c">Pi</th><th class="c">Claude</th></tr></thead>
+  <thead><tr><th>#</th><th>問題</th><th>嚴重度</th><th class="c">Codex</th><th class="c">Qwen</th><th class="c">OpenCode</th><th class="c">Pi</th><th class="c">Codex（ds4）</th><th class="c">Pi（ds4）</th><th class="c">Claude</th></tr></thead>
   <tbody>
-    <tr><td>1</td><td>步驟 3 的範例 <code>N_CPU_MOE_QWEN:=36</code> 比 <code>env.sh</code> 註明的實測下限 38 還低（37 就 OOM），照抄會 OOM</td><td>高</td><td class="c"><span class="miss"><span class="dot"></span>漏</span></td><td class="c"><span class="part"><span class="dot"></span>部分</span></td><td class="c"><span class="miss"><span class="dot"></span>漏</span></td><td class="c"><span class="miss"><span class="dot"></span>漏</span></td><td class="c"><span class="hit"><span class="dot"></span>抓到</span></td></tr>
-    <tr><td>2</td><td>第 194 行寫「見下方『切換主模型』」，但那一節在第 157 行，其實在上方</td><td>中</td><td class="c"><span class="miss"><span class="dot"></span>漏</span></td><td class="c"><span class="miss"><span class="dot"></span>漏</span></td><td class="c"><span class="miss"><span class="dot"></span>漏</span></td><td class="c"><span class="miss"><span class="dot"></span>漏</span></td><td class="c"><span class="miss"><span class="dot"></span>漏</span></td></tr>
-    <tr><td>3</td><td><code>scripts/test-codex-router.sh</code> 不在腳本表裡</td><td>中</td><td class="c"><span class="hit"><span class="dot"></span>抓到</span></td><td class="c"><span class="hit"><span class="dot"></span>抓到</span></td><td class="c"><span class="hit"><span class="dot"></span>抓到</span></td><td class="c"><span class="miss"><span class="dot"></span>漏</span></td><td class="c"><span class="hit"><span class="dot"></span>抓到</span></td></tr>
-    <tr><td>4</td><td>指令對照表「調思考」寫「見下方說明」，但 Qwen Code 那一段沒提思考</td><td>中</td><td class="c"><span class="miss"><span class="dot"></span>漏</span></td><td class="c"><span class="miss"><span class="dot"></span>漏</span></td><td class="c"><span class="miss"><span class="dot"></span>漏</span></td><td class="c"><span class="miss"><span class="dot"></span>漏</span></td><td class="c"><span class="hit"><span class="dot"></span>抓到</span></td></tr>
-    <tr><td>5</td><td>FIM 模型不適合放進 router 跑（會套用主模型的 context）：實測報告有寫，README 沒寫</td><td>中</td><td class="c"><span class="miss"><span class="dot"></span>漏</span></td><td class="c"><span class="miss"><span class="dot"></span>漏</span></td><td class="c"><span class="miss"><span class="dot"></span>漏</span></td><td class="c"><span class="miss"><span class="dot"></span>漏</span></td><td class="c"><span class="part"><span class="dot"></span>部分</span></td></tr>
-    <tr><td>6</td><td>沒說明 <code>agent-test.sh</code> 怎麼指定題目（快照版是第二個參數，預設 fix-inventory）</td><td>中</td><td class="c"><span class="miss"><span class="dot"></span>漏</span></td><td class="c"><span class="miss"><span class="dot"></span>漏</span></td><td class="c"><span class="miss"><span class="dot"></span>漏</span></td><td class="c"><span class="miss"><span class="dot"></span>漏</span></td><td class="c"><span class="hit"><span class="dot"></span>抓到</span></td></tr>
-    <tr><td>7</td><td><code>env.sh</code> 其他可調變數（<code>CTX</code>、<code>KV_TYPE</code>、<code>THREADS</code>、port）沒列出</td><td>低</td><td class="c"><span class="miss"><span class="dot"></span>漏</span></td><td class="c"><span class="hit"><span class="dot"></span>抓到</span></td><td class="c"><span class="miss"><span class="dot"></span>漏</span></td><td class="c"><span class="hit"><span class="dot"></span>抓到</span></td><td class="c"><span class="hit"><span class="dot"></span>抓到</span></td></tr>
-    <tr><td>8</td><td>「resolute」第一次出現在第 25 行，到第 52 行才說明是哪台機器</td><td>低</td><td class="c"><span class="miss"><span class="dot"></span>漏</span></td><td class="c"><span class="miss"><span class="dot"></span>漏</span></td><td class="c"><span class="miss"><span class="dot"></span>漏</span></td><td class="c"><span class="miss"><span class="dot"></span>漏</span></td><td class="c"><span class="miss"><span class="dot"></span>漏</span></td></tr>
-    <tr><td>9</td><td><code>.vscode/settings.json</code> 沒提</td><td>低</td><td class="c"><span class="hit"><span class="dot"></span>抓到</span></td><td class="c"><span class="miss"><span class="dot"></span>漏</span></td><td class="c"><span class="miss"><span class="dot"></span>漏</span></td><td class="c"><span class="miss"><span class="dot"></span>漏</span></td><td class="c"><span class="hit"><span class="dot"></span>抓到</span></td></tr>
-    <tr><td>10</td><td><code>reports/</code>、<code>research_notes/</code> 只連到目錄，沒介紹各檔內容</td><td>低</td><td class="c"><span class="part"><span class="dot"></span>部分</span></td><td class="c"><span class="miss"><span class="dot"></span>漏</span></td><td class="c"><span class="miss"><span class="dot"></span>漏</span></td><td class="c"><span class="miss"><span class="dot"></span>漏</span></td><td class="c"><span class="miss"><span class="dot"></span>漏</span></td></tr>
-    <tr class="sep"><td>11</td><td>換 CUDA 12.8 的做法無效：<code>install-llama.sh</code> 的安裝目錄只用 build 命名，已裝過 13.4 時重跑會直接跳過</td><td>高</td><td class="c"><span class="miss"><span class="dot"></span>漏</span></td><td class="c"><span class="miss"><span class="dot"></span>漏</span></td><td class="c"><span class="miss"><span class="dot"></span>漏</span></td><td class="c"><span class="miss"><span class="dot"></span>漏</span></td><td class="c"><span class="hit"><span class="dot"></span>抓到</span></td></tr>
-    <tr><td>12</td><td>「也試試大 batch」那行 <code>BATCH=4096 UBATCH=4096</code> 就是預設值，和上一行完全相同</td><td>中</td><td class="c"><span class="miss"><span class="dot"></span>漏</span></td><td class="c"><span class="miss"><span class="dot"></span>漏</span></td><td class="c"><span class="miss"><span class="dot"></span>漏</span></td><td class="c"><span class="miss"><span class="dot"></span>漏</span></td><td class="c"><span class="hit"><span class="dot"></span>抓到</span></td></tr>
-    <tr><td>13</td><td>README 說 <code>. env.sh glm</code> 之後「pi、codex 都會跟著用」，但兩者的設定寫死 qwen，不讀 <code>MODEL</code></td><td>高</td><td class="c"><span class="miss"><span class="dot"></span>漏</span></td><td class="c"><span class="miss"><span class="dot"></span>漏</span></td><td class="c"><span class="miss"><span class="dot"></span>漏</span></td><td class="c"><span class="miss"><span class="dot"></span>漏</span></td><td class="c"><span class="miss"><span class="dot"></span>漏</span></td></tr>
-    <tr><td>14</td><td>磁碟空間數字前後不一致：模型 23GB 對 24GB、llama.cpp 800MB 對 560MB</td><td>中</td><td class="c"><span class="miss"><span class="dot"></span>漏</span></td><td class="c"><span class="miss"><span class="dot"></span>漏</span></td><td class="c"><span class="miss"><span class="dot"></span>漏</span></td><td class="c"><span class="miss"><span class="dot"></span>漏</span></td><td class="c"><span class="hit"><span class="dot"></span>抓到</span></td></tr>
-    <tr><td>15</td><td>目錄表說 <code>logs/</code> 有伺服器 log，但 serve 腳本都是 <code>exec llama-server</code>，只輸出到終端機</td><td>低</td><td class="c"><span class="miss"><span class="dot"></span>漏</span></td><td class="c"><span class="miss"><span class="dot"></span>漏</span></td><td class="c"><span class="miss"><span class="dot"></span>漏</span></td><td class="c"><span class="miss"><span class="dot"></span>漏</span></td><td class="c"><span class="hit"><span class="dot"></span>抓到</span></td></tr>
-    <tr><th></th><th>加權命中（滿分 28）</th><th></th><th class="c">3.5</th><th class="c">4.5</th><th class="c">2</th><th class="c">1</th><th class="c">20</th></tr>
+    <tr><td>1</td><td>步驟 3 的範例 <code>N_CPU_MOE_QWEN:=36</code> 比 <code>env.sh</code> 註明的實測下限 38 還低（37 就 OOM），照抄會 OOM</td><td>高</td><td class="c"><span class="miss"><span class="dot"></span>漏</span></td><td class="c"><span class="part"><span class="dot"></span>部分</span></td><td class="c"><span class="miss"><span class="dot"></span>漏</span></td><td class="c"><span class="miss"><span class="dot"></span>漏</span></td><td class="c"><span class="hit"><span class="dot"></span>抓到</span></td><td class="c"><span class="miss"><span class="dot"></span>漏</span></td><td class="c"><span class="hit"><span class="dot"></span>抓到</span></td></tr>
+    <tr><td>2</td><td>第 194 行寫「見下方『切換主模型』」，但那一節在第 157 行，其實在上方</td><td>中</td><td class="c"><span class="miss"><span class="dot"></span>漏</span></td><td class="c"><span class="miss"><span class="dot"></span>漏</span></td><td class="c"><span class="miss"><span class="dot"></span>漏</span></td><td class="c"><span class="miss"><span class="dot"></span>漏</span></td><td class="c"><span class="miss"><span class="dot"></span>漏</span></td><td class="c"><span class="miss"><span class="dot"></span>漏</span></td><td class="c"><span class="miss"><span class="dot"></span>漏</span></td></tr>
+    <tr><td>3</td><td><code>scripts/test-codex-router.sh</code> 不在腳本表裡</td><td>中</td><td class="c"><span class="hit"><span class="dot"></span>抓到</span></td><td class="c"><span class="hit"><span class="dot"></span>抓到</span></td><td class="c"><span class="hit"><span class="dot"></span>抓到</span></td><td class="c"><span class="miss"><span class="dot"></span>漏</span></td><td class="c"><span class="hit"><span class="dot"></span>抓到</span></td><td class="c"><span class="hit"><span class="dot"></span>抓到</span></td><td class="c"><span class="hit"><span class="dot"></span>抓到</span></td></tr>
+    <tr><td>4</td><td>指令對照表「調思考」寫「見下方說明」，但 Qwen Code 那一段沒提思考</td><td>中</td><td class="c"><span class="miss"><span class="dot"></span>漏</span></td><td class="c"><span class="miss"><span class="dot"></span>漏</span></td><td class="c"><span class="miss"><span class="dot"></span>漏</span></td><td class="c"><span class="miss"><span class="dot"></span>漏</span></td><td class="c"><span class="hit"><span class="dot"></span>抓到</span></td><td class="c"><span class="miss"><span class="dot"></span>漏</span></td><td class="c"><span class="hit"><span class="dot"></span>抓到</span></td></tr>
+    <tr><td>5</td><td>FIM 模型不適合放進 router 跑（會套用主模型的 context）：實測報告有寫，README 沒寫</td><td>中</td><td class="c"><span class="miss"><span class="dot"></span>漏</span></td><td class="c"><span class="miss"><span class="dot"></span>漏</span></td><td class="c"><span class="miss"><span class="dot"></span>漏</span></td><td class="c"><span class="miss"><span class="dot"></span>漏</span></td><td class="c"><span class="miss"><span class="dot"></span>漏</span></td><td class="c"><span class="hit"><span class="dot"></span>抓到</span></td><td class="c"><span class="part"><span class="dot"></span>部分</span></td></tr>
+    <tr><td>6</td><td>沒說明 <code>agent-test.sh</code> 怎麼指定題目（快照版是第二個參數，預設 fix-inventory）</td><td>中</td><td class="c"><span class="miss"><span class="dot"></span>漏</span></td><td class="c"><span class="miss"><span class="dot"></span>漏</span></td><td class="c"><span class="miss"><span class="dot"></span>漏</span></td><td class="c"><span class="miss"><span class="dot"></span>漏</span></td><td class="c"><span class="miss"><span class="dot"></span>漏</span></td><td class="c"><span class="part"><span class="dot"></span>部分</span></td><td class="c"><span class="hit"><span class="dot"></span>抓到</span></td></tr>
+    <tr><td>7</td><td><code>env.sh</code> 其他可調變數（<code>CTX</code>、<code>KV_TYPE</code>、<code>THREADS</code>、port）沒列出</td><td>低</td><td class="c"><span class="miss"><span class="dot"></span>漏</span></td><td class="c"><span class="hit"><span class="dot"></span>抓到</span></td><td class="c"><span class="miss"><span class="dot"></span>漏</span></td><td class="c"><span class="hit"><span class="dot"></span>抓到</span></td><td class="c"><span class="miss"><span class="dot"></span>漏</span></td><td class="c"><span class="miss"><span class="dot"></span>漏</span></td><td class="c"><span class="hit"><span class="dot"></span>抓到</span></td></tr>
+    <tr><td>8</td><td>「resolute」第一次出現在第 25 行，到第 52 行才說明是哪台機器</td><td>低</td><td class="c"><span class="miss"><span class="dot"></span>漏</span></td><td class="c"><span class="miss"><span class="dot"></span>漏</span></td><td class="c"><span class="miss"><span class="dot"></span>漏</span></td><td class="c"><span class="miss"><span class="dot"></span>漏</span></td><td class="c"><span class="miss"><span class="dot"></span>漏</span></td><td class="c"><span class="miss"><span class="dot"></span>漏</span></td><td class="c"><span class="miss"><span class="dot"></span>漏</span></td></tr>
+    <tr><td>9</td><td><code>.vscode/settings.json</code> 沒提</td><td>低</td><td class="c"><span class="hit"><span class="dot"></span>抓到</span></td><td class="c"><span class="miss"><span class="dot"></span>漏</span></td><td class="c"><span class="miss"><span class="dot"></span>漏</span></td><td class="c"><span class="miss"><span class="dot"></span>漏</span></td><td class="c"><span class="hit"><span class="dot"></span>抓到</span></td><td class="c"><span class="hit"><span class="dot"></span>抓到</span></td><td class="c"><span class="hit"><span class="dot"></span>抓到</span></td></tr>
+    <tr><td>10</td><td><code>reports/</code>、<code>research_notes/</code> 只連到目錄，沒介紹各檔內容</td><td>低</td><td class="c"><span class="part"><span class="dot"></span>部分</span></td><td class="c"><span class="miss"><span class="dot"></span>漏</span></td><td class="c"><span class="miss"><span class="dot"></span>漏</span></td><td class="c"><span class="miss"><span class="dot"></span>漏</span></td><td class="c"><span class="miss"><span class="dot"></span>漏</span></td><td class="c"><span class="miss"><span class="dot"></span>漏</span></td><td class="c"><span class="miss"><span class="dot"></span>漏</span></td></tr>
+    <tr class="sep"><td>11</td><td>換 CUDA 12.8 的做法無效：<code>install-llama.sh</code> 的安裝目錄只用 build 命名，已裝過 13.4 時重跑會直接跳過</td><td>高</td><td class="c"><span class="miss"><span class="dot"></span>漏</span></td><td class="c"><span class="miss"><span class="dot"></span>漏</span></td><td class="c"><span class="miss"><span class="dot"></span>漏</span></td><td class="c"><span class="miss"><span class="dot"></span>漏</span></td><td class="c"><span class="miss"><span class="dot"></span>漏</span></td><td class="c"><span class="miss"><span class="dot"></span>漏</span></td><td class="c"><span class="hit"><span class="dot"></span>抓到</span></td></tr>
+    <tr><td>12</td><td>「也試試大 batch」那行 <code>BATCH=4096 UBATCH=4096</code> 就是預設值，和上一行完全相同</td><td>中</td><td class="c"><span class="miss"><span class="dot"></span>漏</span></td><td class="c"><span class="miss"><span class="dot"></span>漏</span></td><td class="c"><span class="miss"><span class="dot"></span>漏</span></td><td class="c"><span class="miss"><span class="dot"></span>漏</span></td><td class="c"><span class="miss"><span class="dot"></span>漏</span></td><td class="c"><span class="miss"><span class="dot"></span>漏</span></td><td class="c"><span class="hit"><span class="dot"></span>抓到</span></td></tr>
+    <tr><td>13</td><td>README 說 <code>. env.sh glm</code> 之後「pi、codex 都會跟著用」，但兩者的設定寫死 qwen，不讀 <code>MODEL</code></td><td>高</td><td class="c"><span class="miss"><span class="dot"></span>漏</span></td><td class="c"><span class="miss"><span class="dot"></span>漏</span></td><td class="c"><span class="miss"><span class="dot"></span>漏</span></td><td class="c"><span class="miss"><span class="dot"></span>漏</span></td><td class="c"><span class="miss"><span class="dot"></span>漏</span></td><td class="c"><span class="miss"><span class="dot"></span>漏</span></td><td class="c"><span class="miss"><span class="dot"></span>漏</span></td></tr>
+    <tr><td>14</td><td>磁碟空間數字前後不一致：模型 23GB 對 24GB、llama.cpp 800MB 對 560MB</td><td>中</td><td class="c"><span class="miss"><span class="dot"></span>漏</span></td><td class="c"><span class="miss"><span class="dot"></span>漏</span></td><td class="c"><span class="miss"><span class="dot"></span>漏</span></td><td class="c"><span class="miss"><span class="dot"></span>漏</span></td><td class="c"><span class="part"><span class="dot"></span>部分</span></td><td class="c"><span class="miss"><span class="dot"></span>漏</span></td><td class="c"><span class="hit"><span class="dot"></span>抓到</span></td></tr>
+    <tr><td>15</td><td>目錄表說 <code>logs/</code> 有伺服器 log，但 serve 腳本都是 <code>exec llama-server</code>，只輸出到終端機</td><td>低</td><td class="c"><span class="miss"><span class="dot"></span>漏</span></td><td class="c"><span class="miss"><span class="dot"></span>漏</span></td><td class="c"><span class="miss"><span class="dot"></span>漏</span></td><td class="c"><span class="miss"><span class="dot"></span>漏</span></td><td class="c"><span class="miss"><span class="dot"></span>漏</span></td><td class="c"><span class="miss"><span class="dot"></span>漏</span></td><td class="c"><span class="hit"><span class="dot"></span>抓到</span></td></tr>
+    <tr><th></th><th>加權命中（滿分 28）</th><th></th><th class="c">3.5</th><th class="c">4.5</th><th class="c">2</th><th class="c">1</th><th class="c">9</th><th class="c">6</th><th class="c">20</th></tr>
   </tbody>
 </table>
 </div>
-<p class="small">第 2、8 條五位全部漏掉。「部分」的判定：Qwen 第 1 條說「新使用者可能用錯預設值」，沒看出會 OOM；Codex 第 10 條只講了 reports 裡多一份 HTML；Claude 第 5 條只提到「誤填 FIM 模型名稱會把主模型卸載」，沒提 FIM 會套用主模型的 context。</p>
+<p class="small">第 2、8、13 條七位全部漏掉。「部分」的判定：Qwen 第 1 條說「新使用者可能用錯預設值」，沒看出會 OOM；Codex 第 10 條只講了 reports 裡多一份 HTML；Claude 第 5 條只提到「誤填 FIM 模型名稱會把主模型卸載」，沒提 FIM 會套用主模型的 context；Pi（ds4）第 6 條指出 README 從沒提到 implement-duration，但沒說怎麼指定題目；Codex（ds4）第 14 條只抓到 800MB 對 560MB，沒抓到 23GB 對 24GB。</p>
 
 <h2>錯誤、捏造或離題的建議</h2>
 <div class="tablewrap">
@@ -270,6 +287,10 @@ ul.tight li { margin: 4px 0; }
     <tr><td>Pi</td><td>「各參數對 VRAM 的影響（<code>--ctx-l-len</code>、<code>--n-gpu-layers</code>…）」</td><td><span class="err"><span class="dot"></span>捏造</span> llama-server 沒有 <code>--ctx-l-len</code> 這個參數。</td></tr>
     <tr><td>Pi</td><td>「沒有明確的 <code>.gitignore</code> 檔案，建議檢查是否存在」；「<code>env.sh</code> 是自動產生的嗎？」</td><td><span class="err"><span class="dot"></span>錯</span> <code>.gitignore</code> 就在根目錄，它沒看就建議去檢查；README 寫明 <code>env.sh</code> 進版控、<code>env.local.sh</code> 才是從範本複製的。</td></tr>
     <tr><td>OpenCode</td><td>「沒提到換模型後要重跑 <code>serve-main.sh</code>」</td><td><span class="err"><span class="dot"></span>錯</span> README 第 194 行就寫了「換模型時，伺服器也要跑那個模型」。</td></tr>
+    <tr><td>Codex（ds4）</td><td>「<code>--fit off</code> 關掉長 context 的 fit 重新分配，省 VRAM」，並建議標明這些伺服器參數「在 <code>env.sh</code> 可覆寫」</td><td><span class="err"><span class="dot"></span>錯</span> <code>--fit</code> 的作用是自動調整沒指定的參數，好塞進顯示卡記憶體。關掉它是讓明確指定的 <code>-ngl</code>、<code>--n-cpu-moe</code>、<code>-c</code> 照設定值生效，並不會省 VRAM。<code>--fit off</code>、<code>--jinja</code>、<code>-fa on</code>、<code>-ngl 999</code> 都寫死在 serve 腳本裡，<code>env.sh</code> 只能改 <code>KV_TYPE</code>、<code>CTX</code>、<code>BATCH</code> 等變數。</td></tr>
+    <tr><td>Codex（ds4）</td><td>「腳本表只列了 8 支」（括號裡卻列了 9 個），「<code>scripts/</code> 實際有 9 支」</td><td><span class="err"><span class="dot"></span>數字錯</span> 腳本表有 10 列，<code>scripts/</code> 底下有 10 支。「漏了 test-codex-router」這個結論仍然成立。</td></tr>
+    <tr><td>Pi（ds4）</td><td>「根目錄的 <code>output/</code> 空目錄沒交代用途」，建議列進目錄表</td><td><span class="err"><span class="dot"></span>錯</span> 快照裡沒有 <code>output/</code>，它是這一題指定的報告輸出位置，不屬於專案內容。</td></tr>
+    <tr><td>Pi（ds4）</td><td>「<code>agent-test.sh</code> 的參數只寫了 <code>PI_THINKING</code>，漏了 <code>TIMEOUT</code> 與 <code>CODEX_MODEL</code>」</td><td><span class="err"><span class="dot"></span>錯一半</span> README 第 88 行就寫了「執行時用 <code>CODEX_MODEL=...</code>」，真正沒寫的只有 <code>TIMEOUT</code>。</td></tr>
     <tr><td>Claude</td><td>（沒有錯誤項目）</td><td>主考官抽查的具體說法全部屬實。比較弱的是 C 節的結構建議（加目錄、搬動「快速開始」），屬於品味問題。</td></tr>
   </tbody>
 </table>
@@ -302,6 +323,20 @@ ul.tight li { margin: 4px 0; }
   <li><b>錯誤：</b>編造 <code>--ctx-l-len</code>，沒看就說可能沒有 <code>.gitignore</code>。有用的只有環境變數清單、eval 指南和疑難排解分類這 3 條。</li>
 </ul>
 
+<h3>Codex（ds4）：60 分（ds4 組第 1）</h3>
+<ul class="tight">
+  <li><b>過程：</b>19 次 shell 指令。先分段讀完 README，再分批 cat 出腳本和設定，最後用 grep 回頭核對自己的說法，例如 README 裡有沒有 <code>fit</code>、<code>jinja</code>、<code>Continue</code>、<code>pi-router</code>。花了 809 秒、489K token，是七位裡最慢、送出 token 最多的一位。</li>
+  <li><b>強項：</b>加權命中 9 分，是兩個開源模型組裡最高的。抓到 36 對 38 會 OOM（引用了 <code>env.sh</code> 註解的「37 OOM」）、Qwen Code 一節沒寫思考、800MB 對 560MB。每條都分成「現況」和「建議」兩部分，結尾再點出最重要的幾條。</li>
+  <li><b>弱項：</b>把 <code>--fit off</code> 解釋錯，還說這些參數可以從 <code>env.sh</code> 覆寫；腳本數量也算錯。後半（第 10–15 條）多半是腳本內部的旗標和舊版設定遷移，對讀 README 的人沒什麼用。要推演腳本行為才看得出的問題（第 11、13 條）也沒抓到。</li>
+</ul>
+
+<h3>Pi（ds4）：56 分</h3>
+<ul class="tight">
+  <li><b>過程：</b>11 次工具呼叫（bash×9、read×1、write×1），讀了 README、全部腳本的開頭、設定檔、<code>.gitignore</code>、<code>.vscode</code> 和實測報告，寫完再確認檔案。花了 535 秒、120K token。</li>
+  <li><b>強項：</b>七位裡只有它完整抓到「router 不適合跑 FIM」（Claude 只抓到一半）；另外抓到 implement-duration 從沒被提到，以及 FIM 伺服器沒有驗證指令。報告用表格分成 A（沒提到）、B（不完整）、C（細節）三類，再分高、中、低優先。test-codex-router 那條附了一段可以直接貼進 README 的說明。</li>
+  <li><b>弱項：</b>2 條錯誤（<code>output/</code>、<code>CODEX_MODEL</code>）。A5–A7、B2–B5 多是範本裡的開關和選用參數，價值低。36 對 38、Qwen Code 一節沒寫思考，這兩條要對照前後文才看得出來，它都沒抓到。</li>
+</ul>
+
 <h3>Claude Code（上限標竿）：80 分</h3>
 <ul class="tight">
   <li><b>強項：</b>只用 6 次工具呼叫，一次 <code>cat -n</code> 就讀完全部腳本和設定，再讀實測報告。能抓到「照做會失敗」這類要推演程式行為的問題（第 11、12 條，以及改 <code>CTX</code>、<code>MAIN_PORT</code> 後 harness 設定不會跟著改），也抓到 Qwen Code 一節沒寫思考。每條都附 README 和腳本的行號，並分成 A（照做會失敗）、B（缺漏）、C（結構）三級。</li>
@@ -322,17 +357,20 @@ ul.tight li { margin: 4px 0; }
   </tbody>
 </table>
 </div>
+<p class="small">ds4 組的請求沒有經 logproxy，所以沒有系統提示的紀錄。依 <code>agent.jsonl</code> 核對，兩位的工具呼叫全部在快照內。</p>
 
 <h2>給 harness-lab 的附帶發現</h2>
 <ul class="tight">
-  <li><b>本地模型的審查錯誤率偏高</b>：每份報告有 1–3 條錯誤或捏造，大多是「README 已經寫了卻說沒寫」或「沒查證就下結論」。拿本地模型做文件審查，結論一定要人工核對。</li>
+  <li><b>開源模型的審查都會出錯</b>：本地組每份報告有 1–3 條錯誤或捏造，ds4 組有 1–2 條。大多是「README 已經寫了卻說沒寫」或「沒查證就下結論」，Codex（ds4）對 <code>--fit off</code> 的解釋則是用猜的。用這些模型做文件審查，結論一定要人工核對。</li>
+  <li><b>換成較強的模型，Pi 進步最多</b>：同樣是 Pi，用本地模型時只呼叫 3 次工具就交差；換成 ds4 後呼叫了 11 次，加權命中從 1 升到 6，分數從 46 升到 56。Codex 用兩種模型都會讀腳本，換模型後主要差在覆蓋（加權命中從 3.5 升到 9）。</li>
   <li><b>單次結果不足以比較 harness</b>：建議每位考生跑 3 次取平均，報告改成「平均分數 ± 範圍」。</li>
-  <li><b>這一題的鑑別力不錯</b>：第 2、4、8 條所有考生都漏了，第 11–15 條只有 Claude 抓到，可以留著比較日後的模型或設定。</li>
+  <li><b>這一題的鑑別力不錯</b>：第 2、8、13 條七位都漏了，第 11、12、15 條只有 Claude 抓到，可以留著比較日後的模型或設定。</li>
 </ul>
 
 <h2>結論</h2>
 <p>本地組四位都待在快照內，在 2–3 分鐘內交出報告，分數落在 46–57 之間。差距主要是<b>有沒有認真探索專案</b>：Codex、Qwen Code 讀了腳本和設定，抓到的是專案特有的問題；Pi、OpenCode 讀得少，寫出來的就是放到哪裡都成立的通用清單。</p>
-<p>Claude 和本地組的差距很明顯：覆蓋 21 對 1–5，錯誤 0 對 1–3。這是模型能力的差距，換 harness 補不回來。ds4 組跑完後，可以看出更強的模型搭配這幾個 harness 能把差距縮小多少。</p>
+<p>ds4 組兩位（Codex 60、Pi 56）都比本地組同一個 harness 的分數高，多出來的分數主要在覆蓋和正確性：Codex 抓到 36 對 38 會 OOM、Qwen Code 一節沒寫思考，Pi 抓到 router 不適合跑 FIM。代價是時間，在遠端主機上要 9–14 分鐘，本地組只要 2–3 分鐘。</p>
+<p>和 Claude 比，差距縮小了，但還很明顯：覆蓋是 21 分對本地組的 1–5 分、ds4 組的 6–10 分，錯誤是 0 條對 1–3 條。需要推演腳本實際行為才看得出的問題（第 11、13 條），兩個開源模型組的六位都沒抓到。這是模型能力的差距，換 harness 補不回來。</p>
 
 </main>
 </body>
