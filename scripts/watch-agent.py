@@ -29,7 +29,7 @@ except ImportError:
 THINK_LINES, THINK_CHARS = 8, 800
 TEXT_LINES, TEXT_CHARS = 80, 4000
 RESULT_LINES, RESULT_CHARS = 6, 600
-STYLES = {"思考": "dim", "回覆": "bold green", "工具": "bold dark_cyan", "結果": "dim", "錯誤": "bold red", "警告": "bold yellow", "進度": "dim"}
+STYLES = {"思考": "dim", "回覆": "bold green", "工具": "bold dark_cyan", "結果": "dim", "錯誤": "bold red", "警告": "bold yellow", "進度": "dim", "題目": "bold magenta"}
 t0 = time.time()
 
 
@@ -230,6 +230,9 @@ def main():
     if harness not in HANDLERS:
         ap.error(f"從路徑判斷不出 harness：{run}（應為 logs/runs/<題目>/<harness>/<日期_時間>）")
     handle = HANDLERS[harness]()
+    # 實際送出的題目（agent-test.sh 存的，含自動加上的限時）：有些 harness 的紀錄裡沒有題目
+    if (run / "prompt.md").exists():
+        out("題目", body=(run / "prompt.md").read_text(), md=True, style="dim")
     path = run / "agent.jsonl"
     pos, buf = 0, b""
     while True:

@@ -151,7 +151,12 @@ grade_request() {
 }
 prompt="$(cat "$task_dir/PROMPT.md")"
 # 題目有 TIMEOUT 檔時把限時告訴 agent，讓它分配時間（沒有的題目維持原本的題目，和舊紀錄可比）
-[[ ! -f "$task_dir/TIMEOUT" ]] || prompt+=$'\n\n'"本題限時 $(( TIMEOUT / 60 )) 分鐘，時間到會直接結束，以當時工作目錄的內容評分。收尾工作（例如寫說明文件）請預留時間。"
+if [[ -f "$task_dir/TIMEOUT" ]]; then
+  limit="$(( TIMEOUT / 60 )) 分鐘"; (( TIMEOUT % 60 == 0 )) || limit="$(( TIMEOUT / 60 )) 分 $(( TIMEOUT % 60 )) 秒"
+  prompt+=$'\n\n'"本題限時 $limit，時間到會直接結束，以當時工作目錄的內容評分。收尾工作（例如寫說明文件）請預留時間。"
+fi
+# 實際送出的題目存一份：Claude Code、Codex 的紀錄裡不會有題目，限時那句只有這裡看得到
+printf '%s\n' "$prompt" > "$run/prompt.md"
 has_tests=$(compgen -G "$run/test_*.py" > /dev/null && echo 1 || true)   # 沒有標準答案的題目不放測試，結果由人工判斷
 before="$([[ -z "$has_tests" ]] || sha256sum "$run"/test_*.py)"
 
