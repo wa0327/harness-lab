@@ -8,7 +8,12 @@ what="${1:-all}"
 mkdir -p "$MODELS_DIR"
 
 if [[ "$what" == main || "$what" == all ]]; then
-  hf download "$MAIN_REPO" "$MAIN_FILE" --local-dir "$MODELS_DIR"
+  if [[ -n "$MAIN_FILE" ]]; then
+    hf download "$MAIN_REPO" "$MAIN_FILE" --local-dir "$MODELS_DIR"
+  else
+    echo "MODEL=$MODEL 是遠端模型（$MAIN_URL），不用下載" >&2
+    [[ "$what" == all ]] || exit 1
+  fi
 fi
 if [[ "$what" == fim || "$what" == all ]]; then
   hf download "$FIM_REPO" "$FIM_FILE" --local-dir "$MODELS_DIR"

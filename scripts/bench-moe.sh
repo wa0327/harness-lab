@@ -4,6 +4,7 @@
 # 其他參數沿用 env.sh（UBATCH、KV_TYPE、LOAD_MODE、THREADS…），可用環境變數覆寫
 set -euo pipefail
 source "$(dirname "$0")/../env.sh"
+[[ -n "$MAIN_FILE" ]] || { echo "MODEL=$MODEL 是遠端模型（$MAIN_URL），不在本機跑分" >&2; exit 1; }
 
 values=("${@:-40 38 36 34 32 30 28 26}")
 read -r -a values <<< "${values[*]}"

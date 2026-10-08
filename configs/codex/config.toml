@@ -15,3 +15,11 @@ name = "llama.cpp (harness-lab)"
 base_url = "http://127.0.0.1:8080/v1"
 wire_api = "responses"
 env_key = "API_KEY"
+
+# MODEL=ds4：KK 的 Mac 上的 DeepSeek V4 Flash（ds4.c，經 Tailscale）。用法：codex -c model_provider=ds4 -m deepseek-v4-flash
+# 伺服器支援 Responses API 和 reasoning.effort（none 關掉思考）。不驗證 key，用 DS4_API_KEY 免得送出這台的 API_KEY
+[model_providers.ds4]
+name = "DeepSeek V4 Flash (ds4)"
+base_url = "http://100.82.105.90:8000/v1"
+wire_api = "responses"
+env_key = "DS4_API_KEY"

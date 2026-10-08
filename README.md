@@ -156,7 +156,7 @@ pi --model harness-lab/qwen3.6-35b-a3b --thinking off
 
 ### 切換主模型
 
-`env.sh` 的 `MODEL` 決定主模型：`qwen`（預設，Qwen3.6-35B-A3B）或 `glm`（GLM-4.7-Flash，31B/3B 啟用，UD-Q4_K_XL 17.5GB）。檔名、別名和 `N_CPU_MOE` 都會跟著換：
+`env.sh` 的 `MODEL` 決定主模型：`qwen`（預設，Qwen3.6-35B-A3B）、`glm`（GLM-4.7-Flash，31B/3B 啟用，UD-Q4_K_XL 17.5GB），或遠端的 `ds4`（見下方）。檔名、別名和 `N_CPU_MOE` 都會跟著換：
 
 ```bash
 MODEL=glm scripts/get-models.sh main
@@ -166,6 +166,21 @@ MODEL=glm scripts/agent-test.sh fix-inventory pi   # 紀錄的標籤會加上 [g
 ```
 
 整個終端機都要換的話，用 `. env.sh glm`（換回來是 `. env.sh qwen`），之後執行的腳本、`pi`、`codex` 都會跟著用。注意不要打成 `MODEL=glm . env.sh`：bash 會在 source 結束後把 `MODEL` 還原，之後的腳本又會回到 qwen。新增模型時，在 `env.sh` 的 `case` 加一段（`N_CPU_MOE` 照現有寫法讀 `N_CPU_MOE_<名稱>`，讓各機器能在 `env.local.sh` 覆寫），並在 `configs/pi/models.json` 加上取樣參數。
+
+#### 遠端模型 `ds4`
+
+`MODEL=ds4` 是朋友 KK 的 Mac（M5 Max）上的 DeepSeek V4 Flash（284B MoE，Q2 量化，ds4.c），經 Tailscale 連到 `http://100.82.105.90:8000/v1`。不在本機下載或啟動，`serve-main.sh`、`get-models.sh main`、`bench-moe.sh` 會直接擋下：
+
+```bash
+MODEL=ds4 scripts/agent-test.sh review-readme pi   # 紀錄的標籤會加上 [deepseek-v4-flash]
+. env.sh ds4                                       # 整個終端機切過去
+```
+
+- **前提**：Tailscale 已接受 kkmacbook-pro 的分享，而且 KK 有開機（按需開機）。`agent-test.sh` 開跑前會先檢查連不連得到。
+- **各 harness 的設定是另一組 provider `ds4`**：Pi、Codex 的位址欄位不能讀環境變數，所以位址寫死在四份設定裡；要改位址的話，`configs/` 和 `.home/` 都要改，env.sh 的 `MAIN_URL` 也要一起改。
+- **key 用 `DS4_API_KEY`**（預設 `local`）：伺服器不驗證，另用一個變數，免得把這台的 `API_KEY` 送到別人的伺服器。
+- **思考**：伺服器認 `reasoning_effort`，`none` 是關掉。Pi 的 `--thinking off`／`low`／`medium`／`high` 都有對應；Codex 的 `model_reasoning_effort` 對它有效。
+- **評比時要注意**：GPU 是多人共用的，秒數會受別人影響，不能直接和本機模型比；伺服器日誌看得到所有對話內容。
 
 想走 Pi 官方的 router 模式時，改跑 `scripts/serve-router.sh`。router 會依請求的模型名稱（檔名，如 `Qwen3.6-35B-A3B-UD-Q4_K_XL`）自動載入，所以 Codex 等一般用戶端不必先手動載入。Pi 這邊，第一次要在互動模式裡執行 `/login llama.cpp`（key 可留空，會讀 env.sh 匯出的 `LLAMA_API_KEY`，和 `API_KEY` 同值）和 `/llama`，模型清單才會存下來，之後才能用 `pi --model llama.cpp/Qwen3.6-35B-A3B-UD-Q4_K_XL`。resolute 上已經做過這一步。
 
@@ -185,13 +200,14 @@ MODEL=glm scripts/agent-test.sh fix-inventory pi   # 紀錄的標籤會加上 [g
 | 單次執行後結束 | `pi -p --model ... "題目"` | `codex exec "題目"` | `opencode run "題目"` | `qwen "題目"` |
 | 帶著題目進互動模式 | `pi --model ... "題目"` | `codex "題目"` | `opencode --prompt "題目"` | `qwen -i "題目"` |
 | 換成 GLM | `--model harness-lab/glm-4.7-flash` | `-m glm-4.7-flash` | `-m harness-lab/glm-4.7-flash` | `-m glm-4.7-flash` |
+| 換成 ds4（遠端） | `--model ds4/deepseek-v4-flash` | `-c model_provider=ds4 -m deepseek-v4-flash` | `-m ds4/deepseek-v4-flash` | `-m deepseek-v4-flash` |
 | 調思考 | `--thinking off` 或 `medium` | 見下方說明 | 見下方說明 | 見下方說明 |
 | 接續上次對話 | `-c`（最近一次）、`-r`（挑選） | `codex resume --last`、`codex resume` | `-c`、`-s <id>` | `-c`、`-r` |
 | 沙箱 | 無 | `-s read-only`／`workspace-write` | 無 | 無（沒設定 docker） |
 | 自動核准 | 不詢問，一律執行 | `--approve-for-me`，或 `-s danger-full-access` | `run` 加 `--auto` | `-y`，或 `--approval-mode auto-edit` |
 | 機器可讀輸出 | `--mode json` | `--json` | `--format json` | `-o stream-json` |
 
-換模型時，伺服器也要跑那個模型（`MODEL=glm scripts/serve-main.sh`），見下方「切換主模型」。
+換模型時，伺服器也要跑那個模型（`MODEL=glm scripts/serve-main.sh`），見上方「切換主模型」。ds4 是遠端模型，不用啟動伺服器。
 
 ### Pi
 

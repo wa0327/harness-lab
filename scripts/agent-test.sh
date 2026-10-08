@@ -15,6 +15,14 @@ CLAUDE_MODEL=claude-opus-5-5     # claude 是上限標竿：固定用 Anthropic 
 task_dir="$LAB_DIR/evals/$task"
 [[ -d "$task_dir" ]] || { echo "沒有這個題目：evals/$task" >&2; exit 2; }
 
+# 開跑前確認模型伺服器連得到（本機模型要先跑 serve-main.sh；ds4 是按需開機的遠端主機），免得白跑一輪
+if [[ "$harness" != claude ]]; then
+  [[ "$harness" != pi-router || -n "$MAIN_FILE" ]] || { echo "pi-router 只能用本機模型，MODEL=$MODEL 是遠端模型" >&2; exit 2; }
+  key="$API_KEY"; [[ "$MAIN_PROVIDER" != ds4 ]] || key="$DS4_API_KEY"
+  curl -sf -m 10 -o /dev/null -H "Authorization: Bearer $key" "$MAIN_URL/models" || {
+    echo "連不到模型伺服器 $MAIN_URL（MODEL=$MODEL）：本機模型先跑 scripts/serve-main.sh；ds4 先確認 Tailscale 連線、主機有開" >&2; exit 1; }
+fi
+
 # run 目錄在 harness-lab 的 git repo 裡，agent 有可能跑出 run 目錄改到題目原檔，開始和結束時各檢查一次；
 # 原檔不乾淨就不跑，免得複製到被改過的版本。
 # SNAPSHOT 題目的內容來自指定的 commit，不從 evals/ 複製，不檢查（跑出去新增檔案的情況由結束時的 lab_untracked 抓）
@@ -67,20 +75,20 @@ start=$(date +%s)
 set +e
 case "$harness" in
   pi)
-    (cd "$work" && timeout "$TIMEOUT" pi -p --mode json --no-session ${PI_THINKING:+--thinking "$PI_THINKING"} --model "harness-lab/$MAIN_ALIAS" "$prompt") \
+    (cd "$work" && timeout "$TIMEOUT" pi -p --mode json --no-session ${PI_THINKING:+--thinking "$PI_THINKING"} --model "$MAIN_PROVIDER/$MAIN_ALIAS" "$prompt") \
       > "$run/agent.jsonl" 2> "$run/agent.stderr" ;;
   pi-router)
     # 需要 serve-router.sh，且在 Pi 互動模式跑過一次 /llama（模型清單才會存進 .home/pi）
     (cd "$work" && timeout "$TIMEOUT" pi -p --mode json --no-session ${PI_THINKING:+--thinking "$PI_THINKING"} --model "llama.cpp/${MAIN_FILE%.gguf}" "$prompt") \
       > "$run/agent.jsonl" 2> "$run/agent.stderr" ;;
   codex)
-    timeout "$TIMEOUT" codex exec --json -o "$run/final.md" -C "$work" ${extra_dir:+--add-dir "$extra_dir"} --skip-git-repo-check -s workspace-write --ephemeral ${CODEX_MODEL:+-c "model=\"$CODEX_MODEL\""} "$prompt" \
+    timeout "$TIMEOUT" codex exec --json -o "$run/final.md" -C "$work" ${extra_dir:+--add-dir "$extra_dir"} --skip-git-repo-check -s workspace-write --ephemeral -c "model_provider=\"$MAIN_PROVIDER\"" -c "model=\"${CODEX_MODEL:-$MAIN_ALIAS}\"" "$prompt" \
       > "$run/agent.jsonl" 2> "$run/agent.stderr" ;;
   opencode)
     # OpenCode 以 git 根目錄當專案根目錄，不 git init 的話會是 harness-lab，實測模型因此跑去改了 evals/ 的原檔
     git -C "$work" init -q
     # 沒有沙箱；--auto 讓預設要詢問的權限自動通過（非互動時沒人能回答）；--thinking 才會把思考內容寫進 JSON
-    (cd "$work" && timeout "$TIMEOUT" opencode run --format json --auto --thinking -m "harness-lab/$MAIN_ALIAS" "$prompt") \
+    (cd "$work" && timeout "$TIMEOUT" opencode run --format json --auto --thinking -m "$MAIN_PROVIDER/$MAIN_ALIAS" "$prompt") \
       > "$run/agent.jsonl" 2> "$run/agent.stderr" ;;
   qwen)
     # 沒有沙箱（-y 自動核准所有工具）；--chat-recording false 相當於 Pi 的 --no-session

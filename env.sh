@@ -19,10 +19,11 @@ export LLAMA_BIN="${LLAMA_BIN:-$LAB_DIR/vendor/llama.cpp/current}"
 
 # 模型
 export MODELS_DIR="${MODELS_DIR:-$LAB_DIR/models}"
-# 主模型用 MODEL 切換（qwen｜glm），各值仍可個別覆寫，例：MODEL=glm scripts/serve-main.sh
+# 主模型用 MODEL 切換（qwen｜glm｜ds4），各值仍可個別覆寫，例：MODEL=glm scripts/serve-main.sh
 # 互動 shell 可直接帶參數：. env.sh glm（腳本 source 時 $1 是腳本自己的參數，所以只認直接 source 的）
 # N_CPU_MOE 和模型的層數有關，所以跟著模型走；各機器的值寫在 env.local.sh 的 N_CPU_MOE_<模型>
-_LAB_PER_MODEL="MAIN_REPO MAIN_FILE MAIN_ALIAS N_CPU_MOE"
+# MAIN_PROVIDER 是各 harness 設定裡的 provider 名稱：本機的模型都是 harness-lab，遠端的模型各有一組
+_LAB_PER_MODEL="MAIN_REPO MAIN_FILE MAIN_ALIAS N_CPU_MOE MAIN_PROVIDER"
 if [[ ${#BASH_SOURCE[@]} -eq 1 && -n "${1:-}" ]]; then
   # 明確指定模型（. env.sh glm）：一律用該模型的值，不沿用 shell 裡既有的
   MODEL="$1"
@@ -38,19 +39,23 @@ if [[ -n "${_LAB_MODEL:-}" && "$_LAB_MODEL" != "$MODEL" ]]; then
 fi
 case "$MODEL" in
   qwen)
-    _d=(unsloth/Qwen3.6-35B-A3B-GGUF Qwen3.6-35B-A3B-UD-Q4_K_XL.gguf qwen3.6-35b-a3b "${N_CPU_MOE_QWEN:-38}") ;;   # 40 層。resolute 實測：-ub 4096 時 38 是下限（37 OOM），40→38 只快約 2%
+    _d=(unsloth/Qwen3.6-35B-A3B-GGUF Qwen3.6-35B-A3B-UD-Q4_K_XL.gguf qwen3.6-35b-a3b "${N_CPU_MOE_QWEN:-38}" harness-lab) ;;   # 40 層。resolute 實測：-ub 4096 時 38 是下限（37 OOM），40→38 只快約 2%
   glm)
-    _d=(unsloth/GLM-4.7-Flash-GGUF GLM-4.7-Flash-UD-Q4_K_XL.gguf glm-4.7-flash "${N_CPU_MOE_GLM:-38}") ;;   # 47 層（第 0 層不是 MoE）。resolute 實測：-ub 4096 時 38 可用
-  *) echo "env.sh：未知的 MODEL=$MODEL（可用 qwen、glm）" >&2; return 1 2>/dev/null || exit 1 ;;
+    _d=(unsloth/GLM-4.7-Flash-GGUF GLM-4.7-Flash-UD-Q4_K_XL.gguf glm-4.7-flash "${N_CPU_MOE_GLM:-38}" harness-lab) ;;   # 47 層（第 0 層不是 MoE）。resolute 實測：-ub 4096 時 38 可用
+  ds4)
+    # 遠端模型：KK 的 Mac（M5 Max）上的 DeepSeek V4 Flash（284B MoE，Q2），經 Tailscale 連線，按需開機、多人共用。
+    # 不在本機下載或啟動，所以沒有檔案和 N_CPU_MOE（serve-main.sh 等會擋下）
+    _d=("" "" deepseek-v4-flash "" ds4) ;;
+  *) echo "env.sh：未知的 MODEL=$MODEL（可用 qwen、glm、ds4）" >&2; return 1 2>/dev/null || exit 1 ;;
 esac
 # 沒有 _LAB_MODEL 紀錄卻已經有 MAIN_FILE：多半是從別處繼承來的舊值（例如先 source 舊版 env.sh 才開 VS Code），提醒一下
 if [[ -z "${_LAB_MODEL:-}" && -n "${MAIN_FILE:-}" && "$MAIN_FILE" != "${_d[1]}" ]]; then
   echo "env.sh 警告：MAIN_FILE=$MAIN_FILE 不是 MODEL=$MODEL 的預設檔案，沿用既有值。不是刻意的話執行：unset $_LAB_PER_MODEL" >&2
 fi
-: "${MAIN_REPO:=${_d[0]}}" "${MAIN_FILE:=${_d[1]}}" "${MAIN_ALIAS:=${_d[2]}}" "${N_CPU_MOE:=${_d[3]}}"
+: "${MAIN_REPO:=${_d[0]}}" "${MAIN_FILE:=${_d[1]}}" "${MAIN_ALIAS:=${_d[2]}}" "${N_CPU_MOE:=${_d[3]}}" "${MAIN_PROVIDER:=${_d[4]}}"
 unset _d
-export MAIN_REPO MAIN_FILE MAIN_ALIAS N_CPU_MOE
-export _LAB_MODEL="$MODEL" _LAB_MAIN_REPO="$MAIN_REPO" _LAB_MAIN_FILE="$MAIN_FILE" _LAB_MAIN_ALIAS="$MAIN_ALIAS" _LAB_N_CPU_MOE="$N_CPU_MOE"
+export MAIN_REPO MAIN_FILE MAIN_ALIAS N_CPU_MOE MAIN_PROVIDER
+export _LAB_MODEL="$MODEL" _LAB_MAIN_REPO="$MAIN_REPO" _LAB_MAIN_FILE="$MAIN_FILE" _LAB_MAIN_ALIAS="$MAIN_ALIAS" _LAB_N_CPU_MOE="$N_CPU_MOE" _LAB_MAIN_PROVIDER="$MAIN_PROVIDER"
 export FIM_REPO="${FIM_REPO:-ggml-org/Qwen2.5-Coder-1.5B-Q8_0-GGUF}"
 export FIM_FILE="${FIM_FILE:-qwen2.5-coder-1.5b-q8_0.gguf}"
 
@@ -66,6 +71,14 @@ if [[ "$API_KEY" == "$LAB_DEFAULT_API_KEY" && "$HOST" != 127.0.0.1 && "$HOST" !=
 fi
 export MAIN_PORT="${MAIN_PORT:-8080}"
 export FIM_PORT="${FIM_PORT:-8012}"   # llama.vscode 預設連 8012
+# 主模型的 API 位址，給腳本檢查連線用。harness 實際連的位址寫在各自設定的 provider 裡
+# （Pi、Codex 的位址欄位不能讀環境變數），改 ds4 的位址時 configs/ 和 .home/ 的設定要一起改
+case "$MAIN_PROVIDER" in
+  ds4) export MAIN_URL="http://100.82.105.90:8000/v1" ;;
+  *)   export MAIN_URL="http://127.0.0.1:$MAIN_PORT/v1" ;;
+esac
+# ds4 的伺服器不驗證 key，但 harness 需要有值。另用一個變數，免得把這台的 API_KEY 送到別人的伺服器
+export DS4_API_KEY="${DS4_API_KEY:-local}"
 export FIM_CTX="${FIM_CTX:-8192}"     # 補全不需長 context；0（原生 32K）會和主模型搶 VRAM 而 OOM
 export FIM_BATCH="${FIM_BATCH:-512}"
 

@@ -14,10 +14,16 @@ echo ""
 # 1. 讀取 config.toml 的 model_provider 設定
 echo "[1] 連線設定（來自 $CONFIG）"
 if [[ -f "$CONFIG" ]]; then
-  provider_name=$(grep -A1 '^\[model_providers' "$CONFIG" | grep 'name =' | sed 's/.*= "//;s/".*//')
-  base_url=$(grep 'base_url' "$CONFIG" | sed 's/.*= "//;s/".*//')
-  model=$(grep '^model ' "$CONFIG" | sed 's/.*= "//;s/".*//')
-  wire_api=$(grep 'wire_api' "$CONFIG" | sed 's/.*= "//;s/".*//')
+  # 設定裡可能有多組 provider（例如 ds4），只看 model_provider 指定的那組
+  mapfile -t cfg < <(python3 -I -c '
+import sys, tomllib
+c = tomllib.load(open(sys.argv[1], "rb"))
+p = c.get("model_provider", "")
+s = c.get("model_providers", {}).get(p, {})
+for v in (p, s.get("name", ""), s.get("base_url", ""), c.get("model", ""), s.get("wire_api", "")):
+    print(v)
+' "$CONFIG")
+  provider_name="${cfg[1]} (${cfg[0]})" base_url="${cfg[2]}" model="${cfg[3]}" wire_api="${cfg[4]}"
   echo "  provider   = $provider_name"
   echo "  base_url   = $base_url"
   echo "  model      = $model"

@@ -28,6 +28,17 @@
           "contextWindowSize": 65536,
           "samplingParams": { "temperature": 0.7, "top_p": 1.0, "max_tokens": 16384 }
         }
+      },
+      {
+        // MODEL=ds4：KK 的 Mac 上的 DeepSeek V4 Flash（經 Tailscale）。伺服器不驗證 key，用 DS4_API_KEY 免得送出這台的 API_KEY
+        "id": "deepseek-v4-flash",
+        "name": "DeepSeek V4 Flash (ds4)",
+        "baseUrl": "http://100.82.105.90:8000/v1",
+        "envKey": "DS4_API_KEY",
+        "generationConfig": {
+          "contextWindowSize": 65536,
+          "samplingParams": { "max_tokens": 16384 }
+        }
       }
     ]
   },

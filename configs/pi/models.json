@@ -67,6 +67,35 @@
           }
         }
       ]
+    },
+    "ds4": {
+      "baseUrl": "http://100.82.105.90:8000/v1",
+      "api": "openai-completions",
+      "apiKey": "$DS4_API_KEY",
+      "models": [
+        {
+          "id": "deepseek-v4-flash",
+          "contextWindow": 65536,
+          "maxTokens": 16384,
+          "reasoning": true,
+          "thinkingLevelMap": {
+            "off": "none",
+            "minimal": null,
+            "low": "low",
+            "medium": "medium",
+            "high": "high",
+            "xhigh": null
+          },
+          "compat": {
+            "supportsStore": false,
+            "supportsDeveloperRole": false,
+            "supportsReasoningEffort": true,
+            "supportsUsageInStreaming": true,
+            "supportsStrictMode": false,
+            "maxTokensField": "max_tokens"
+          }
+        }
+      ]
     }
   }
 }

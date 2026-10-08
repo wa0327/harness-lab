@@ -6,6 +6,7 @@
 #   代價：請求別的模型（例如誤填 FIM 模型名稱）會把主模型卸載。FIM 請另用 serve-fim.sh
 set -euo pipefail
 source "$(dirname "$0")/../env.sh"
+[[ -n "$MAIN_FILE" ]] || { echo "MODEL=$MODEL 是遠端模型（$MAIN_URL），不在本機啟動，直接用 harness 連過去" >&2; exit 1; }
 unset LLAMA_API_KEY   # 這是給 Pi 的；llama-server 也會讀同名變數當自己的 key，伺服器的 key 一律由 --api-key 傳入
 
 exec "$LLAMA_BIN/llama-server" \
