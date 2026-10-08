@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# 用同一個題目測不同 harness：複製 evals/<題目> 到 logs/runs/，讓 harness 非互動解題，再自動驗證
+# 用同一個題目測不同 harness：複製 evals/<題目> 到 logs/runs/<題目>/<harness>/<日期_時間>/，讓 harness 非互動解題，再自動驗證
 # 用法：scripts/agent-test.sh <題目> <pi|pi-router|codex|opencode|qwen>   需要先啟動 scripts/serve-main.sh
 set -euo pipefail
 source "$(dirname "$0")/../env.sh"
@@ -16,9 +16,11 @@ task_dir="$LAB_DIR/evals/$task"
 
 # run 目錄在 harness-lab 的 git repo 裡，agent 有可能跑出 run 目錄改到題目原檔，開始和結束時各檢查一次；
 # 原檔不乾淨就不跑，免得複製到被改過的版本。
-# SNAPSHOT 題目的內容來自指定的 commit，不從 evals/ 複製，不檢查。快照本身是 git repo，harness 不會把上層當成專案根目錄
+# SNAPSHOT 題目的內容來自指定的 commit，不從 evals/ 複製，不檢查（跑出去新增檔案的情況由結束時的 lab_untracked 抓）
 snapshot=""; [[ -f "$task_dir/SNAPSHOT" ]] && snapshot=1
 lab_state() { git -C "$LAB_DIR" status --porcelain --untracked-files=all -- "evals/$task"; }
+# harness-lab 裡沒被 .gitignore 排除的未追蹤檔案（logs/、.cache/ 不算），開始和結束時比對，抓 agent 用絕對路徑寫到外面
+lab_untracked() { git -C "$LAB_DIR" ls-files --others --exclude-standard | LC_ALL=C sort; }
 if [[ -z "$snapshot" ]]; then
   state_before="$(lab_state)"
   if [[ -n "$state_before" ]]; then
@@ -27,7 +29,7 @@ if [[ -z "$snapshot" ]]; then
   fi
 fi
 
-run="$LOG_DIR/runs/$task-$harness-$(date +%Y%m%d-%H%M%S)"
+run="$LOG_DIR/runs/$task/$harness/$(date +%Y%m%d_%H%M%S)"
 mkdir -p "$run"
 work="$run" extra_dir=""   # agent 的工作目錄；extra_dir 是工作目錄以外還要讓它寫的地方
 if [[ -n "$snapshot" ]]; then
@@ -59,6 +61,7 @@ has_tests=$(compgen -G "$run/test_*.py" > /dev/null && echo 1 || true)   # 沒�
 before="$([[ -z "$has_tests" ]] || sha256sum "$run"/test_*.py)"
 
 # 每次執行留下：agent.jsonl（結構化事件，給 compare-runs.py）、agent.stderr、final.md（最終回覆）、meta.json
+untracked_before="$(lab_untracked)"
 start=$(date +%s)
 set +e
 case "$harness" in
@@ -106,6 +109,17 @@ if [[ -z "$snapshot" && -n "$(lab_state)" ]]; then
   git -C "$LAB_DIR" diff -- "evals/$task" > "$run/escaped.diff"
   verdict=FAIL summary="改到 evals/$task 原檔（見 escaped.diff）"
   echo "警告：$harness 改到了 evals/$task 的原檔，請檢查後還原：git -C $LAB_DIR status evals/$task" >&2
+fi
+new_files="$(LC_ALL=C comm -13 <(echo "$untracked_before") <(lab_untracked))"
+if [[ -n "$new_files" ]]; then
+  # 實測 Qwen Code 在快照裡把 output/ 寫成絕對路徑 harness-lab/output/。也可能是你自己在這段時間新增的。
+  # 複製一份到 run 目錄的 escaped/，原檔留著讓你檢查後自己刪；已經存在的檔案被改不會被抓到
+  echo "$new_files" > "$run/escaped-files.txt"
+  mkdir -p "$run/escaped"
+  (cd "$LAB_DIR" && echo "$new_files" | xargs -d '\n' cp --parents -t "$run/escaped/") || true
+  summary="$summary；harness-lab 多了 $(echo "$new_files" | wc -l) 個檔案，可能是 agent 寫到工作目錄外（見 escaped-files.txt）"
+  echo "警告：執行期間 harness-lab 多了以下檔案，可能是 $harness 寫到工作目錄外（已複製到 $run/escaped/）：" >&2
+  echo "$new_files" >&2
 fi
 label="$harness${PI_THINKING:+ (thinking=$PI_THINKING)}${CODEX_MODEL:+ (router)}"
 [[ "$MODEL" == qwen ]] || label="$label [$MAIN_ALIAS]"   # 預設模型不加，和舊紀錄的標籤一致

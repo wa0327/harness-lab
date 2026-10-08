@@ -2,7 +2,7 @@
 """比較 agent-test.sh 的執行結果：token、回合、工具呼叫、程式差異、最終回覆。
 
 用法：
-  scripts/compare-runs.py RUN_DIR [RUN_DIR ...]   指定要比較的 run 目錄（在 logs/runs/ 下）
+  scripts/compare-runs.py RUN_DIR [RUN_DIR ...]   指定要比較的 run 目錄（logs/runs/<題目>/<harness>/<日期_時間>）
   scripts/compare-runs.py --latest TASK           每種 harness 取該題最新一次
   scripts/compare-runs.py --latest TASK --md      輸出 Markdown（預設是終端機用的對齊表格）
   scripts/compare-runs.py --final RUN_DIR         只印最終回覆（agent-test.sh 內部使用）
@@ -149,12 +149,12 @@ def load_run(run):
     run = Path(run).resolve()
     meta_path = run / "meta.json"
     meta = json.loads(meta_path.read_text()) if meta_path.exists() else {}
-    harness = meta.get("harness") or next((h for h in PARSERS if f"-{h}-" in run.name), "pi")
+    harness = meta.get("harness") or run.parent.name   # 舊的 run 沒有 meta.json，從路徑判斷
     events = load_events(run / "agent.jsonl")
     parsed = PARSERS.get(harness, parse_pi)(events)
     if not events:
         parsed = None
-    task = meta.get("task") or run.name.rsplit(f"-{harness}-", 1)[0]
+    task = meta.get("task") or run.parent.parent.name
     return {"dir": run, "meta": meta, "harness": harness, "task": task,
             "label": meta.get("label", harness), "m": parsed}
 
@@ -202,8 +202,8 @@ NOTES = [
 
 
 def col_titles(runs):
-    return [(r["label"], r["dir"].name.rsplit("-", 2)[-2][4:] + "-" + r["dir"].name.rsplit("-", 1)[-1][:4])
-            for r in runs]
+    # 目錄名是 YYYYmmdd_HHMMSS，欄位標題只取 mmdd-HHMM
+    return [(r["label"], f'{r["dir"].name[4:8]}-{r["dir"].name[9:13]}') for r in runs]
 
 
 def table_md(runs):
@@ -291,7 +291,7 @@ def finals(runs, md=True):
 
 def latest_runs(task):
     best = {}
-    for d in sorted((LOG_DIR / "runs").glob(f"{task}-*")):
+    for d in sorted((LOG_DIR / "runs" / task).glob("*/*")):   # 同一個 harness 底下依時間排序，後面的蓋掉前面的
         if not (d / "meta.json").exists() or not (d / "agent.jsonl").exists():
             continue
         r = load_run(d)
