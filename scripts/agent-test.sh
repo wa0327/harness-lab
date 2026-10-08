@@ -27,19 +27,15 @@ if [[ "$harness" != claude ]]; then
     echo "連不到模型伺服器 $MAIN_URL（MODEL=$MODEL）：本機模型先跑 scripts/serve-main.sh；ds4 先確認 Tailscale 連線、主機有開" >&2; exit 1; }
 fi
 
-# run 目錄在 harness-lab 的 git repo 裡，agent 有可能跑出 run 目錄改到題目原檔，開始和結束時各檢查一次；
-# 原檔不乾淨就不跑，免得複製到被改過的版本。
-# SNAPSHOT 題目的內容來自指定的 commit，不從 evals/ 複製，不檢查（跑出去新增檔案的情況由結束時的 lab_untracked 抓）
+# run 目錄在 harness-lab 裡，agent 有可能跑出 run 目錄改到題目原檔：開跑前把 evals/<題目> 複製一份到 /tmp，
+# 結束時比對，被改過就判 FAIL。不要求原檔已提交，正在寫的新題目也能直接跑。
+# SNAPSHOT 題目的內容來自指定的 commit，不從 evals/ 複製，不比對（跑出去新增檔案的情況由結束時的 lab_untracked 抓）
 snapshot=""; [[ -f "$task_dir/SNAPSHOT" ]] && snapshot=1
-lab_state() { git -C "$LAB_DIR" status --porcelain --untracked-files=all -- "evals/$task"; }
 # harness-lab 裡沒被 .gitignore 排除的未追蹤檔案（logs/、.cache/ 不算），開始和結束時比對，抓 agent 用絕對路徑寫到外面
 lab_untracked() { git -C "$LAB_DIR" ls-files --others --exclude-standard | LC_ALL=C sort; }
 if [[ -z "$snapshot" ]]; then
-  state_before="$(lab_state)"
-  if [[ -n "$state_before" ]]; then
-    echo "evals/$task 有未提交的改動，先還原（git checkout -- evals/$task，並刪掉多出來的檔案）再跑：" >&2
-    echo "$state_before" >&2; exit 1
-  fi
+  task_orig="$(mktemp -d)"
+  cp -a "$task_dir/." "$task_orig/"
 fi
 
 run="$LOG_DIR/runs/$task/$harness/$(date +%Y%m%d_%H%M%S)"
@@ -135,11 +131,14 @@ else
   if [[ "$before" == "$(sha256sum "$run"/test_*.py)" ]]; then tests_ok=未改; else tests_ok=被改; verdict=FAIL; fi
   summary="$(tail -1 "$run/verify.log")"
 fi
-if [[ -z "$snapshot" && -n "$(lab_state)" ]]; then
-  # agent 跑出 run 目錄改了題目原檔：run 目錄裡的結果不代表它解了題
-  git -C "$LAB_DIR" diff -- "evals/$task" > "$run/escaped.diff"
-  verdict=FAIL summary="改到 evals/$task 原檔（見 escaped.diff）"
-  echo "警告：$harness 改到了 evals/$task 的原檔，請檢查後還原：git -C $LAB_DIR status evals/$task" >&2
+if [[ -z "$snapshot" ]]; then
+  if ! diff -r "$task_orig" "$task_dir" > /dev/null 2>&1; then
+    # agent 跑出 run 目錄改了題目原檔：run 目錄裡的結果不代表它解了題。原本的內容在 escaped.diff 的 - 那一側
+    diff -ruN "$task_orig" "$task_dir" > "$run/escaped.diff" || true
+    verdict=FAIL summary="改到 evals/$task 原檔（見 escaped.diff）"
+    echo "警告：$harness 改到了 evals/$task 的原檔，請照 $run/escaped.diff 還原" >&2
+  fi
+  rm -rf "$task_orig"
 fi
 new_files="$(LC_ALL=C comm -13 <(echo "$untracked_before") <(lab_untracked))"
 if [[ -n "$new_files" ]]; then
