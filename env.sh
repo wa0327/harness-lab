@@ -14,7 +14,9 @@ export LLAMA_BIN="${LLAMA_BIN:-$LAB_DIR/vendor/llama.cpp/current}"
 # 模型
 export MODELS_DIR="${MODELS_DIR:-$LAB_DIR/models}"
 # 主模型用 MODEL 切換（qwen｜glm），各值仍可個別覆寫，例：MODEL=glm scripts/serve-main.sh
+# 互動 shell 可直接帶參數：. env.sh glm（腳本 source 時 $1 是腳本自己的參數，所以只認直接 source 的）
 # N_CPU_MOE 和模型的層數有關，所以跟著模型走
+[[ ${#BASH_SOURCE[@]} -eq 1 && -n "${1:-}" ]] && MODEL="$1"
 export MODEL="${MODEL:-qwen}"
 # 在已 source 過的 shell 裡換 MODEL 時，清掉上一個模型帶進來的值（和上次算出的值不同，代表是手動覆寫，保留）
 if [[ -n "${_LAB_MODEL:-}" && "$_LAB_MODEL" != "$MODEL" ]]; then
