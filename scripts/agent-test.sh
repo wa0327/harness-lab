@@ -24,7 +24,7 @@ if [[ "$harness" != claude ]]; then
   [[ "$harness" != pi-router || -n "$MAIN_FILE" ]] || { echo "pi-router 只能用本機模型，MODEL=$MODEL 是遠端模型" >&2; exit 2; }
   key="$API_KEY"; [[ "$MAIN_PROVIDER" != ds4 ]] || key="$DS4_API_KEY"
   curl -sf -m 10 -o /dev/null -H "Authorization: Bearer $key" "$MAIN_URL/models" || {
-    echo "連不到模型伺服器 $MAIN_URL（MODEL=$MODEL）：本機模型先跑 scripts/serve-main.sh；ds4 先確認 Tailscale 連線、主機有開" >&2; exit 1; }
+    echo "連不到模型伺服器 $MAIN_URL（MODEL=$MODEL）" >&2; exit 1; }
 fi
 
 # run 目錄在 harness-lab 裡，agent 有可能跑出 run 目錄改到題目原檔：開跑前把 evals/<題目> 複製一份到 /tmp，
