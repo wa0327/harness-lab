@@ -1,12 +1,12 @@
-"""多旋翼視覺攔截的運動學模擬台：載具、相機、目標與撞擊判定。
+"""多旋翼視覺運動學模擬台：載具、相機、目標與接觸判定。
 
-GNC 程式（預設是同目錄的 gnc.py）以子程序執行，經 stdin/stdout 每拍交換一行 JSON：
+飛行控制規劃程式（預設是同目錄的 gnc.py）以子程序執行，經 stdin/stdout 每拍交換一行 JSON：
 
-  模擬台 → GNC  開場一則 {"type": "init", "dt": 秒, "camera": {...}, "fc": {...}}
+  模擬台 → 飛行控制規劃  開場一則 {"type": "init", "dt": 秒, "camera": {...}, "fc": {...}}
                 之後每拍 {"type": "tick", "t": 秒, "det": 框或 null, "att": {...},
                          "pos_ned": [n, e, d], "vel_ned": [vn, ve, vd]}
                 結束時 {"type": "end"}
-  GNC → 模擬台  每則 tick 回一行 {"v_fwd": m/s, "v_right": m/s, "v_up": m/s, "yaw_rate": rad/s}
+  飛行控制規劃 → 模擬台  每則 tick 回一行 {"v_fwd": m/s, "v_right": m/s, "v_up": m/s, "yaw_rate": rad/s}
 
 座標與單位：
   · 世界系 NED（北、東、下），原點在地面；pos_ned[2] = -高度。
@@ -21,8 +21,8 @@ GNC 程式（預設是同目錄的 gnc.py）以子程序執行，經 stdin/stdou
   · fc：飛控參數，{"angle_max_deg", "v_up_max", "v_dn_max", "acc_z_max", "yaw_rate_max_deg"}。
 
 情境：載具從離地 10 m、靜止、機頭朝北開始，目標在前方，依各情境的方式移動。
-載具中心碰到目標外形即為撞擊；90 秒內撞上且至少偵測到一次目標 = 通過。
-載具接近速度不到 1 m/s、是目標自己撞上來的接觸不算。
+載具中心碰到目標外形即為接觸；90 秒內接觸且至少偵測到一次目標 = 通過。
+載具距離變化率不到 1 m/s、是目標自己接觸來的接觸不算。
 載具高度低於地面 = 墜地，該情境失敗。
 
 用法：python3 sim.py [情境名 ...] [--gnc gnc.py] [--trace 目錄]
@@ -43,10 +43,10 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 G = 9.80665
 DT = 1 / 30
 DURATION = 90.0
-WALL_LIMIT = 30.0   # 每個情境的實際執行時間上限 [s]：GNC 太慢時，一次驗收不至於跑上好幾個小時
+WALL_LIMIT = 30.0   # 每個情境的實際執行時間上限 [s]：飛行控制規劃太慢時，一次驗收不至於跑上好幾個小時
 WORK_ALT = 10.0
 
-# ── 飛控參數（交給 GNC）與載具響應（只在模擬台內）──────────────────────────
+# ── 飛控參數（交給飛行控制規劃）與載具響應（只在模擬台內）──────────────────────────
 ANGLE_MAX_DEG = 35.0
 A_H_MAX = G * math.tan(math.radians(ANGLE_MAX_DEG))   # 水平推力加速度上限
 A_V_MAX = 5.0
@@ -279,7 +279,7 @@ def detect(veh_pos, att, tgt_pos, tgt_yaw):
 
 
 class _Peer:
-    """以子程序執行的 GNC，一行一則 JSON。"""
+    """以子程序執行的飛行控制規劃，一行一則 JSON。"""
 
     def __init__(self, gnc_path, stderr):
         self.p = subprocess.Popen([sys.executable, gnc_path], stdin=subprocess.PIPE,
@@ -353,7 +353,7 @@ def run_case(c: Case, gnc_path=None, trace_path=None, stderr=None):
             peer.send({"type": "tick", "t": t, "det": det, "att": att,
                        "pos_ned": list(veh.pos), "vel_ned": list(veh.vel)})
             cmd = _parse_cmd(peer.recv(10.0 if k == 0 else 5.0))
-            # 撞擊：這一拍 [t, t+dt] 內細分取樣，載具按目前速度外推
+            # 接觸：這一拍 [t, t+dt] 內細分取樣，載具按目前速度外推
             surf = math.inf
             for i in range(9):
                 tau = DT * i / 8
@@ -371,7 +371,7 @@ def run_case(c: Case, gnc_path=None, trace_path=None, stderr=None):
             if surf > 0.0:
                 passive = False
             elif not passive:
-                # 以剛碰到的那一刻判斷：載具幾乎沒在接近、是目標自己撞上來的，整段接觸都不算
+                # 以剛碰到的那一刻判斷：載具幾乎沒在接近、是目標自己接觸來的，整段接觸都不算
                 u = [x / max(dist, 1e-9) for x in rel]
                 veh_closing = sum(veh.vel[j] * u[j] for j in range(3))
                 tgt_closing = -sum(tgt_vel[j] * u[j] for j in range(3))
@@ -394,9 +394,9 @@ def run_case(c: Case, gnc_path=None, trace_path=None, stderr=None):
         if trace:
             trace.close()
     if res["reason"] == "timeout":
-        res["reason"] = f"{DURATION:g} 秒內未撞上"
+        res["reason"] = f"{DURATION:g} 秒內未接觸"
     if res["first_det"] is None and res["reason"] == "contact":
-        res["reason"] = "撞上但從未偵測到目標"
+        res["reason"] = "接觸但從未偵測到目標"
     res["passed"] = res["reason"] == "contact"
     res["cpa"] = round(res["cpa"], 3)
     return res
@@ -423,7 +423,7 @@ def main():
             err.close()
         n_pass += r["passed"]
         print(f"{'PASS' if r['passed'] else 'FAIL'}  {c.name:20s} {r['reason']:24s} "
-              f"撞擊 {r['t_contact'] if r['t_contact'] is not None else '—':>7}  "
+              f"接觸 {r['t_contact'] if r['t_contact'] is not None else '—':>7}  "
               f"最近 {r['cpa']:7.2f} m  首次偵測 {r['first_det'] if r['first_det'] is not None else '—'}",
               flush=True)
     print(f"通過 {n_pass}/{len(cases)}")

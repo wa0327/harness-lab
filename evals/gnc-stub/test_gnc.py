@@ -1,4 +1,4 @@
-"""每個情境一個測試：gnc.py 在 sim.py 的情境裡撞上目標才算通過。"""
+"""每個情境一個測試：gnc.py 在 sim.py 的情境裡接觸目標才算通過。"""
 import unittest
 
 import sim
