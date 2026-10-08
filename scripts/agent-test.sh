@@ -14,21 +14,23 @@ CODEX_MODEL="${CODEX_MODEL:-}"   # 例：接 router 時 CODEX_MODEL=Qwen3.6-35B-
 task_dir="$LAB_DIR/evals/$task"
 [[ -d "$task_dir" ]] || { echo "沒有這個題目：evals/$task" >&2; exit 2; }
 
-# run 目錄在 harness-lab 的 git repo 裡，agent 有可能跑出 run 目錄改到工作區，開始和結束時各記一次狀態來比對。
-# 一般題目從 evals/<題目> 複製，原檔不乾淨就不跑，免得複製到被改過的版本。
-# SNAPSHOT 題目的內容來自指定的 commit，不受工作區影響，不檢查是否乾淨；agent 可能改到任何地方，所以看整個工作區
-if [[ -f "$task_dir/SNAPSHOT" ]]; then watch=.; else watch="evals/$task"; fi
-lab_state() { git -C "$LAB_DIR" status --porcelain --untracked-files=all -- "$watch"; }
-state_before="$(lab_state)"
-if [[ "$watch" != . && -n "$state_before" ]]; then
-  echo "evals/$task 有未提交的改動，先還原（git checkout -- evals/$task，並刪掉多出來的檔案）再跑：" >&2
-  echo "$state_before" >&2; exit 1
+# run 目錄在 harness-lab 的 git repo 裡，agent 有可能跑出 run 目錄改到題目原檔，開始和結束時各檢查一次；
+# 原檔不乾淨就不跑，免得複製到被改過的版本。
+# SNAPSHOT 題目的內容來自指定的 commit，不從 evals/ 複製，不檢查。快照本身是 git repo，harness 不會把上層當成專案根目錄
+snapshot=""; [[ -f "$task_dir/SNAPSHOT" ]] && snapshot=1
+lab_state() { git -C "$LAB_DIR" status --porcelain --untracked-files=all -- "evals/$task"; }
+if [[ -z "$snapshot" ]]; then
+  state_before="$(lab_state)"
+  if [[ -n "$state_before" ]]; then
+    echo "evals/$task 有未提交的改動，先還原（git checkout -- evals/$task，並刪掉多出來的檔案）再跑：" >&2
+    echo "$state_before" >&2; exit 1
+  fi
 fi
 
 run="$LOG_DIR/runs/$task-$harness-$(date +%Y%m%d-%H%M%S)"
 mkdir -p "$run"
 work="$run" extra_dir=""   # agent 的工作目錄；extra_dir 是工作目錄以外還要讓它寫的地方
-if [[ "$watch" == . ]]; then
+if [[ -n "$snapshot" ]]; then
   # 題目就是 harness-lab 本身（例如審查 README）：在 SNAPSHOT 指定 commit 的快照裡工作。
   # 快照每個 commit 只拉一次，存在 .cache/snapshots/，本身是只有一個 commit 的 git repo（看不到之後的歷史），
   # 各 harness 以 git 根目錄判斷專案根目錄時也會停在這裡。開跑前一律 reset + clean 回到乾淨狀態，
@@ -99,18 +101,11 @@ else
   if [[ "$before" == "$(sha256sum "$run"/test_*.py)" ]]; then tests_ok=未改; else tests_ok=被改; verdict=FAIL; fi
   summary="$(tail -1 "$run/verify.log")"
 fi
-state_after="$(lab_state)"
-if [[ "$watch" != . && -n "$state_after" ]]; then
+if [[ -z "$snapshot" && -n "$(lab_state)" ]]; then
   # agent 跑出 run 目錄改了題目原檔：run 目錄裡的結果不代表它解了題
   git -C "$LAB_DIR" diff -- "evals/$task" > "$run/escaped.diff"
   verdict=FAIL summary="改到 evals/$task 原檔（見 escaped.diff）"
   echo "警告：$harness 改到了 evals/$task 的原檔，請檢查後還原：git -C $LAB_DIR status evals/$task" >&2
-elif [[ "$watch" == . && "$state_after" != "$state_before" ]]; then
-  # 工作區本來就可能有改動，只比 git status 的變化（已經是改過的檔案再被改不會顯示）；也可能是你自己在這段時間改的
-  diff <(echo "$state_before") <(echo "$state_after") > "$run/escaped.diff" || true
-  summary="工作區有變化，可能是 agent 跑出 run 目錄（見 escaped.diff）"
-  echo "警告：執行期間 harness-lab 工作區的 git status 有變化，可能是 $harness 跑出 run 目錄：" >&2
-  cat "$run/escaped.diff" >&2
 fi
 label="$harness${PI_THINKING:+ (thinking=$PI_THINKING)}${CODEX_MODEL:+ (router)}"
 [[ "$MODEL" == qwen ]] || label="$label [$MAIN_ALIAS]"   # 預設模型不加，和舊紀錄的標籤一致
