@@ -13,9 +13,27 @@ export LLAMA_BIN="${LLAMA_BIN:-$LAB_DIR/vendor/llama.cpp/current}"
 
 # 模型
 export MODELS_DIR="${MODELS_DIR:-$LAB_DIR/models}"
-export MAIN_REPO="${MAIN_REPO:-unsloth/Qwen3.6-35B-A3B-GGUF}"
-export MAIN_FILE="${MAIN_FILE:-Qwen3.6-35B-A3B-UD-Q4_K_XL.gguf}"
-export MAIN_ALIAS="${MAIN_ALIAS:-qwen3.6-35b-a3b}"
+# 主模型用 MODEL 切換（qwen｜glm），各值仍可個別覆寫，例：MODEL=glm scripts/serve-main.sh
+# N_CPU_MOE 和模型的層數有關，所以跟著模型走
+export MODEL="${MODEL:-qwen}"
+# 在已 source 過的 shell 裡換 MODEL 時，清掉上一個模型帶進來的值（和上次算出的值不同，代表是手動覆寫，保留）
+if [[ -n "${_LAB_MODEL:-}" && "$_LAB_MODEL" != "$MODEL" ]]; then
+  for _v in MAIN_REPO MAIN_FILE MAIN_ALIAS N_CPU_MOE; do
+    _prev="_LAB_$_v"; [[ "${!_v:-}" == "${!_prev:-}" ]] && unset "$_v"
+  done
+  unset _v _prev
+fi
+case "$MODEL" in
+  qwen)
+    : "${MAIN_REPO:=unsloth/Qwen3.6-35B-A3B-GGUF}" "${MAIN_FILE:=Qwen3.6-35B-A3B-UD-Q4_K_XL.gguf}" "${MAIN_ALIAS:=qwen3.6-35b-a3b}"
+    : "${N_CPU_MOE:=38}" ;;   # 40 層。resolute 實測：-ub 4096 時 38 是下限（37 OOM），40→38 只快約 2%
+  glm)
+    : "${MAIN_REPO:=unsloth/GLM-4.7-Flash-GGUF}" "${MAIN_FILE:=GLM-4.7-Flash-UD-Q4_K_XL.gguf}" "${MAIN_ALIAS:=glm-4.7-flash}"
+    : "${N_CPU_MOE:=47}" ;;   # 47 層（第 0 層不是 MoE），47 = 專家全放 CPU；尚未用 bench-moe.sh 實測
+  *) echo "env.sh：未知的 MODEL=$MODEL（可用 qwen、glm）" >&2; return 1 2>/dev/null || exit 1 ;;
+esac
+export MAIN_REPO MAIN_FILE MAIN_ALIAS N_CPU_MOE
+export _LAB_MODEL="$MODEL" _LAB_MAIN_REPO="$MAIN_REPO" _LAB_MAIN_FILE="$MAIN_FILE" _LAB_MAIN_ALIAS="$MAIN_ALIAS" _LAB_N_CPU_MOE="$N_CPU_MOE"
 export FIM_REPO="${FIM_REPO:-ggml-org/Qwen2.5-Coder-1.5B-Q8_0-GGUF}"
 export FIM_FILE="${FIM_FILE:-qwen2.5-coder-1.5b-q8_0.gguf}"
 
@@ -28,7 +46,7 @@ export FIM_CTX="${FIM_CTX:-8192}"     # 補全不需長 context；0（原生 32K
 export FIM_BATCH="${FIM_BATCH:-512}"
 
 # 效能參數（resolute 用 scripts/bench-moe.sh 實測後選定，總結見 reports/resolute 實測結果.md）
-export N_CPU_MOE="${N_CPU_MOE:-38}"   # resolute 實測：-ub 4096 時 38 是下限（37 OOM），40→38 只快約 2%
+# N_CPU_MOE 在上面「模型」段，依 MODEL 而定
 export CTX="${CTX:-65536}"
 export BATCH="${BATCH:-4096}"
 export UBATCH="${UBATCH:-4096}"   # 實測預填比 2048 快約 22%，生成慢約 4%

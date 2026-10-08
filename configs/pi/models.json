@@ -21,6 +21,16 @@
               "top_p": 0.8
             }
           }
+        },
+        {
+          "id": "glm-4.7-flash",
+          "contextWindow": 65536,
+          "maxTokens": 16384,
+          "reasoning": true,
+          "samplingParams": {
+            "temperature": 0.7,
+            "top_p": 1.0
+          }
         }
       ]
     }

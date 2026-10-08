@@ -38,6 +38,19 @@ pi --model harness-lab/qwen3.6-35b-a3b --thinking off   # 小改動用 off／low
 codex
 ```
 
+### 切換主模型
+
+`env.sh` 的 `MODEL` 決定主模型：`qwen`（預設，Qwen3.6-35B-A3B）或 `glm`（GLM-4.7-Flash，31B/3B 啟用，UD-Q4_K_XL 17.5GB）。檔名、別名和 `N_CPU_MOE` 都會跟著換：
+
+```bash
+MODEL=glm scripts/get-models.sh main
+MODEL=glm scripts/serve-main.sh
+MODEL=glm pi --model harness-lab/glm-4.7-flash
+MODEL=glm scripts/agent-test.sh pi       # 紀錄的標籤會加上 [glm-4.7-flash]
+```
+
+已經 `source env.sh` 的終端機也可以直接用 `MODEL=glm` 切換。新增模型時，在 `env.sh` 的 `case` 加一段，並在 `configs/pi/models.json` 加上取樣參數。
+
 想走 Pi 官方的 router 模式時，改跑 `scripts/serve-router.sh`。router 會依請求的模型名稱（檔名，如 `Qwen3.6-35B-A3B-UD-Q4_K_XL`）自動載入，所以 Codex 等一般用戶端不必先手動載入。Pi 這邊，第一次要在互動模式裡執行 `/login llama.cpp`（key 可留空，會讀 env.sh 匯出的 `LLAMA_API_KEY`）和 `/llama`，模型清單才會存下來，之後才能用 `pi --model llama.cpp/Qwen3.6-35B-A3B-UD-Q4_K_XL`。resolute 上已經做過這一步。
 
 ## 腳本
