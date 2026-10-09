@@ -50,7 +50,7 @@ cp env.local.sh.example env.local.sh   # 這台機器自己的設定，不進版
 ### 3. 安裝
 
 ```bash
-scripts/setup-tools.sh      # venv（hf）、Pi、Codex、OpenCode、Qwen Code（版本依 package-lock.json），並把 configs/ 範本複製到 .home/
+scripts/setup-tools.sh      # venv（hf、rich）、Pi、Codex、OpenCode、Qwen Code（版本依 package-lock.json），並把 configs/ 範本複製到 .home/
 scripts/install-llama.sh    # llama.cpp（固定 build），下載約 560MB，解壓後約 800MB
 scripts/get-models.sh       # 主模型與 FIM 模型，約 24GB（參數 main、fim 只下載其中一個，預設 all）
 ```
@@ -263,7 +263,7 @@ MODEL=ds4 scripts/agent-test.sh review-readme pi   # 紀錄的標籤會加上 [d
 - **一定要用 `bin/opencode`**：`source env.sh` 之後打 `opencode` 就是它。不要直接執行 `node_modules/.bin/opencode`，否則設定和資料會寫進家目錄。
 - **專案根目錄是 git repo 的根目錄，不是目前的目錄**：在 repo 的子目錄裡啟動時，它還是會讀、改子目錄以外的檔案。實測時它就因此跑去改了 `evals/` 的原檔。只想讓它動某個子目錄的話，在那個子目錄裡另外 `git init`，或乾脆換到 repo 外面。
 - **第一次用到搜尋工具會下載 ripgrep**（放到 `.home/opencode/`），大約要等一分半，之後就不會了。
-- **思考**：`opencode run --thinking` 會把思考內容顯示出來。`--variant`（思考強度）對 llama-server 是否有效還沒驗證。
+- **思考**：`opencode run --thinking` 只是把思考內容顯示出來，不是開關。內建的 `--variant none` 對這裡的自訂模型沒有作用（請求裡什麼都不送）；要關掉思考，在模型的 `options` 加 `"reasoningEffort": "none"`，可以另寫一份疊加設定、用 `OPENCODE_CONFIG` 指過去（`agent-test.sh --thinking off` 就是這樣做）。
 - **沒有沙箱**：`bash` 以你的權限直接執行。
 
 ### Qwen Code
@@ -278,6 +278,7 @@ MODEL=ds4 scripts/agent-test.sh review-readme pi   # 紀錄的標籤會加上 [d
 
   非互動執行時沒人能回答詢問，要用 `-y`。
 - **沒有沙箱**：`-s` 需要 docker 或 podman，這裡沒有設定，所以 `-y` 時 shell 指令以你的權限直接執行。
+- **思考**：沒有對應的旗標。要關掉的話，在 `.home/qwen/settings.json` 每個模型的 `generationConfig` 加 `"reasoning": false`（送 `enable_thinking=false`），或另給一份系統設定、用 `QWEN_CODE_SYSTEM_SETTINGS_PATH` 指過去（`agent-test.sh --thinking off` 就是這樣做）。
 - **背景功能已在範本裡關掉**：自動 memory 擷取、memory 整併、工具摘要都會在背景另外呼叫模型，在單一本地伺服器上會拖慢主任務。要用的話改 `.home/qwen/settings.json`。
 - **context 用到「視窗 − 33K」就會自動壓縮**：它固定保留 20K 給摘要輸出、13K 緩衝，`context.autoCompactThreshold` 只能調低、不能調高。視窗 64K 時約 32K 就壓縮，壓縮後只會放回最近碰過的 5 個檔案，其他內容只剩摘要。review-readme 實測時，模型就照著摘要寫出 README 裡不存在的引用，這是 Qwen 預設 `CTX` 改成 128K（約 98K 才壓縮）的原因。stream-json 裡不會出現壓縮事件。
 - **其他**：`--chat-recording false` 不留對話紀錄。`--max-wall-time 10m` 限制總時間，適合無人看管時用。
@@ -293,23 +294,23 @@ MODEL=ds4 scripts/agent-test.sh review-readme pi   # 紀錄的標籤會加上 [d
 | `scripts/test-codex-router.sh` | 檢查 Codex 設定的 provider、base URL、key（401 會提示），並用設定裡的模型（或 `CODEX_MODEL`）實際發一次 chat completion。接 router 時用來確認模型名稱對不對 |
 | `scripts/serve-fim.sh` | Tab 補全伺服器，port 8012，給 llama.vscode / Continue。context 8K、batch 512 時可以和主模型同時跑（合計 VRAM 7.7GB） |
 | `scripts/bench-moe.sh` | `llama-bench` 掃描 `--n-cpu-moe`，結果寫到 `logs/bench/`。參數是要測的值（預設 40 38 36…），`PP`、`TG` 調整預填與生成長度 |
-| `scripts/agent-test.sh` | `scripts/agent-test.sh <題目> <harness>`：用 `evals/` 裡的同一題測不同 harness（`pi`、`pi-router`、`codex`、`opencode`、`qwen`、`claude`），`claude` 是上限標竿：用家目錄裡的 Claude Code 和你的登入，固定 Opus 5.5，不走本地伺服器，會產生 API 費用（`compare-runs.py` 會列出）。自動驗證並記錄到 `logs/agent-runs.md`，每次的工作目錄與事件紀錄在 `logs/runs/<題目>/<harness>/<日期_時間>/`。`PI_THINKING=off` 可以調 Pi 的思考強度。題目目錄有 `SNAPSHOT`（commit）時（如 `review-readme`），agent 改在 harness-lab 那個 commit 的快照裡工作：快照每個 commit 只拉一次，存在 `/tmp/agent-snapshots/`，開跑前一律 reset + clean 回到乾淨狀態，產出寫到快照裡的 `output/`，跑完複製到 run 目錄的 `output/`，其他改動存成 run 目錄的 `snapshot.diff`。快照刻意放在 harness-lab 外面：放在底下時，agent 會從工作目錄的路徑推出上層才是真正的專案，實測 Qwen Code 因此跑去審查工作區。沒有 `test_*.py` 的題目不自動驗證，結果記為「人工」。題目目錄有 `ISOLATE` 或 `ACCEPT` 時（如 `gnc-stub`），agent 改在 `/tmp` 的工作目錄作答，評分一律用原檔（見下方「評測題目」）。加 `--thinking off` 關掉模型思考，各 harness 用實測有效的方法：Pi `--thinking off`、Codex `model_reasoning_effort="none"`、OpenCode 疊加設定送 `reasoningEffort: none`、Qwen Code 另給系統設定在每個模型加 `reasoning: false`；Claude 關不掉，直接報錯。紀錄的標籤會加上 `(thinking=off)`。加 `--monitor` 會即時顯示 agent 的思考、回覆、工具呼叫與結果（`scripts/watch-agent.py`，也能單獨用來看某一次 run）。中途按 Ctrl+C 會結束 harness，照常評分記錄，摘要註明被中斷。其他題目從 `evals/<題目>` 複製，開跑前另存一份原檔，結束時比對，發現 agent 改到原檔就判 FAIL（差異存成 `escaped.diff`）；題目不需要先提交。執行期間 harness-lab 若多了未追蹤的檔案（可能是 agent 用絕對路徑寫到工作目錄外），會發出警告，並把檔案複製到 run 目錄的 `escaped/` |
+| `scripts/agent-test.sh` | `scripts/agent-test.sh <題目> <harness>`：用 `evals/` 裡的同一題測不同 harness（`pi`、`pi-router`、`codex`、`opencode`、`qwen`、`claude`），`claude` 是上限標竿：用家目錄裡的 Claude Code 和你的登入，固定 Opus 5.5，不走本地伺服器，會產生 API 費用（`compare-runs.py` 會列出）。自動驗證並記錄到 `logs/agent-runs.md`，結束時印出結果與通過幾個測試（例如 `FAIL，通過 20/24`）。每次的工作目錄與事件紀錄在 `logs/runs/<題目>/<harness>/<日期_時間>/`。`PI_THINKING=off` 可以調 Pi 的思考強度。題目目錄有 `SNAPSHOT`（commit）時（如 `review-readme`），agent 改在 harness-lab 那個 commit 的快照裡工作：快照每個 commit 只拉一次，存在 `/tmp/agent-snapshots/`，開跑前一律 reset + clean 回到乾淨狀態，產出寫到快照裡的 `output/`，跑完複製到 run 目錄的 `output/`，其他改動存成 run 目錄的 `snapshot.diff`。快照刻意放在 harness-lab 外面：放在底下時，agent 會從工作目錄的路徑推出上層才是真正的專案，實測 Qwen Code 因此跑去審查工作區。沒有 `test_*.py` 的題目不自動驗證，結果記為「人工」。題目目錄有 `ISOLATE` 或 `ACCEPT` 時（如 `gnc-stub`），agent 改在 `/tmp` 的工作目錄作答，評分一律用原檔（見下方「評測題目」）。加 `--thinking off` 關掉模型思考，各 harness 用實測有效的方法：Pi `--thinking off`、Codex `model_reasoning_effort="none"`、OpenCode 疊加設定送 `reasoningEffort: none`、Qwen Code 另給系統設定在每個模型加 `reasoning: false`；Claude 關不掉，直接報錯。紀錄的標籤會加上 `(thinking=off)`。加 `--monitor` 會先顯示實際送出的題目，再即時顯示 agent 的思考、回覆、工具呼叫與結果（`scripts/watch-agent.py`，也能單獨用來看某一次 run）。中途按 Ctrl+C 會結束 harness，照常評分記錄，摘要註明被中斷。其他題目從 `evals/<題目>` 複製，開跑前另存一份原檔，結束時比對，發現 agent 改到原檔就判 FAIL（差異存成 `escaped.diff`）；題目不需要先提交。執行期間 harness-lab 若多了未追蹤的檔案（可能是 agent 用絕對路徑寫到工作目錄外），會發出警告，並把檔案複製到 run 目錄的 `escaped/` |
 | `bin/opencode` | OpenCode 的包裝腳本，把 XDG 目錄導向 `.home/opencode/` |
 | `scripts/compare-runs.py` | 比較多次執行的 token、回合數、工具呼叫、程式差異與最終回覆。`--latest fix-inventory` 取每種 harness 最新一次；`--md` 輸出 Markdown |
 | `scripts/setup-tools.sh`、`install-llama.sh`、`get-models.sh` | 安裝工具、llama.cpp 與模型，全部放在專案內。`setup-tools.sh` 會先檢查前置需求 |
 
 ### 評測題目（`evals/`）
 
-目前有 `hi`、`fix-inventory`、`implement-duration`（較難）、`gnc-stub`（最難）、`review-readme`、`cwd-probe` 六題。`gnc-stub` 是寫多旋翼的視覺攔截 GNC：從相機的目標框和飛控的姿態算出速度命令，撞上目標。運動學模擬器（`sim.py`）和測試都給 agent，24 個情境各是一個測試，`verify.log` 的 failures 數就是沒過的情境數。限時 7.5 分鐘（`TIMEOUT` 檔 450 秒）。`hi` 是冒煙測試：只要回答 hi，幾秒就跑完，用來確認 harness、伺服器、模型整條路都通，例如 `scripts/agent-test.sh hi opencode`。`cwd-probe` 不考能力，是檢查隔離：請 agent 列出工作目錄、照抄環境資訊裡的路徑，用來確認 harness 有沒有把快照以外的東西帶進 context。新增題目時，在 `evals/<名稱>/` 放：
+目前有 `hi`、`fix-inventory`、`implement-duration`（較難）、`gnc-stub`（最難）、`review-readme`、`cwd-probe` 六題。`gnc-stub` 是寫多旋翼的視覺運動規劃（`gnc.py`）：從相機的目標框和飛控回報的姿態、位置與速度算出速度命令，接近並接觸目標。運動學模擬器（`sim.py`）和測試都給 agent，24 個情境各是一個測試，`agent-test.sh` 結束時印的通過數就是過了幾個情境。限時 5 分鐘（`TIMEOUT` 檔 300 秒）。`hi` 是冒煙測試：只要回答 hi，幾秒就跑完，用來確認 harness、伺服器、模型整條路都通，例如 `scripts/agent-test.sh hi opencode`。`cwd-probe` 不考能力，是檢查隔離：請 agent 列出工作目錄、照抄環境資訊裡的路徑，用來確認 harness 有沒有把快照以外的東西帶進 context。新增題目時，在 `evals/<名稱>/` 放：
 
 - `PROMPT.md`：送給 agent 的題目，必要。
 - `test_*.py`：有的話就用 `python3 -m unittest -q` 自動驗證，執行前後比對測試檔的 sha256，被 agent 改過就判 FAIL。沒有的話結果記為「人工」。
 - `SNAPSHOT`：放一個 commit，agent 改在 harness-lab 那個 commit 的快照裡工作（題目就是審查本專案時用）。
 - `ISOLATE`：空檔案即可。agent 改在 `/tmp/agent-work.*` 作答，題目檔（`PROMPT.md` 以外）複製進去並設成唯讀。跑完把工作目錄複製到 run 目錄的 `output/`，用原檔蓋回題目檔，再在那裡跑測試：agent 改了自己那份影響不到成績，但會被判 FAIL。紀錄裡出現 harness-lab 的 `logs/runs` 或 `evals` 路徑（agent 跑出去看評分檔或別人的答案）也判 FAIL。不在 run 目錄作答，是因為 agent 會從路徑推到 harness-lab。
-- `TIMEOUT`：放限時秒數（例如 `3600`），取代預設的 1800 秒；命令列有給 `TIMEOUT` 時以命令列為準。有這個檔時，題目最後會自動加一句「本題限時 N 分鐘…」告訴 agent。
+- `TIMEOUT`：放限時秒數（例如 `3600`），取代預設的 1800 秒；命令列有給 `TIMEOUT` 時以命令列為準。有這個檔時，題目最後會自動加一句「本題限時 N 分鐘…」告訴 agent（不是整分鐘時寫成「N 分 M 秒」）。
 - `ACCEPT`：放驗收次數上限，用法同 `ISOLATE`，但題目檔不放進工作目錄，agent 只能用 `./accept` 送出驗收：它只在佇列目錄 `/tmp/agent-accept.*` 放請求單，由 `agent-test.sh` 在 agent 的程序之外評分、寫回結果，次數也由這邊計算。用完就結束 harness，成績是最後一次驗收的那份。每次驗收的作答與輸出存在 run 目錄的 `accept/`。
 
-`agent-test.sh` 的環境變數：`TIMEOUT`（每次執行的上限，預設是題目目錄 `TIMEOUT` 檔的值，沒有的話 1800 秒）、`PI_THINKING`、`CODEX_MODEL`（接 router 時填檔名）。每次執行在 run 目錄留下 `agent.jsonl`（事件，給 `compare-runs.py`）、`agent.stderr`、`final.md`（最終回覆）、`meta.json`，有測試時還有 `verify.log`。harness 派了子 agent 時，子 agent 的紀錄另外存到 `subagents/`（`scripts/collect-subagents.py`；Claude Code 的子 agent 訊息本來就在 `agent.jsonl` 裡）。
+`agent-test.sh` 的環境變數：`TIMEOUT`（每次執行的上限，預設是題目目錄 `TIMEOUT` 檔的值，沒有的話 1800 秒）、`PI_THINKING`、`CODEX_MODEL`（接 router 時填檔名）。每次執行在 run 目錄留下 `prompt.md`（實際送出的題目，含自動加上的限時；Claude Code、Codex 的紀錄裡沒有題目）、`agent.jsonl`（事件，給 `compare-runs.py`）、`agent.stderr`、`final.md`（最終回覆）、`meta.json`，有測試時還有 `verify.log`。harness 派了子 agent 時，子 agent 的紀錄另外存到 `subagents/`（`scripts/collect-subagents.py`；Claude Code 的子 agent 訊息本來就在 `agent.jsonl` 裡）。
 
 ### 升級與版本
 
@@ -317,7 +318,7 @@ MODEL=ds4 scripts/agent-test.sh review-readme pi   # 紀錄的標籤會加上 [d
 
 - **升級 harness**：`source env.sh && npm install <套件>@latest --ignore-scripts`，再重跑 `scripts/setup-tools.sh`（OpenCode 的 postinstall 由它處理），跑一輪 `agent-test.sh` 確認沒問題後提交 `package-lock.json`。`package.json` 都寫 `latest`，版本靠 lockfile 固定；`setup-tools.sh` 用的是 `npm install` 而不是 `npm ci`，嚴格來說不保證完全照 lockfile 裝。
 - **試新的 llama.cpp**：在 `env.local.sh` 設 `LLAMA_BUILD`，再跑 `scripts/install-llama.sh`，`current` 會切到新版。不要只用 `scripts/install-llama.sh <build>`：那樣 `LLAMA_BUILD` 沒變，`bench-moe.sh` 的紀錄會標錯版本。改回原本的值再重跑就能退回。
-- **`hf`**：`setup-tools.sh` 每次都 `pip install -U huggingface_hub`，沒有固定版本，所以「整份重設」時也會順便升級它。
+- **`hf`**：`setup-tools.sh` 每次都 `pip install -U huggingface_hub rich`，沒有固定版本，所以「整份重設」時也會順便升級它。
 
 ## 其他 harness 的接法
 
