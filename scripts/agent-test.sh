@@ -357,4 +357,11 @@ log="$LOG_DIR/agent-runs.md"
 [[ -f "$log" ]] || printf '| 時間 | harness | 題目 | 秒數 | agent 結束碼 | 結果 | 測試檔 | 驗證輸出 | 紀錄 |\n|---|---|---|---|---|---|---|---|---|\n' > "$log"
 printf '| %s | %s | %s | %s | %s | %s | %s | %s | %s |\n' \
   "$(date '+%F %T')" "$label" "$task" "$secs" "$agent_exit" "$verdict" "$tests_ok" "$summary" "${run#$LAB_DIR/}" >> "$log"
-echo "$harness $task：$verdict（${secs}s，測試檔$tests_ok）→ $run"
+# 通過數：從 verify.log 的「Ran N tests」與最後一行的 failures／errors 算
+passed=""
+if [[ -f "$run/verify.log" ]]; then
+  n_ran=$(grep -oE '^Ran [0-9]+' "$run/verify.log" | grep -oE '[0-9]+' || true)
+  n_bad=$(tail -1 "$run/verify.log" | grep -oE '(failures|errors)=[0-9]+' | grep -oE '[0-9]+' | paste -sd+ | bc 2>/dev/null || true)
+  [[ -z "$n_ran" ]] || passed="，通過 $(( n_ran - ${n_bad:-0} ))/$n_ran"
+fi
+echo "$harness $task：$verdict$passed（${secs}s，測試檔$tests_ok）→ $run"
