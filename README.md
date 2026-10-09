@@ -209,6 +209,19 @@ MODEL=ds4 scripts/agent-test.sh review-readme pi   # 紀錄的標籤會加上 [d
 - **思考**：伺服器認 `reasoning_effort`，`none` 是關掉。Pi 的 `--thinking off`／`low`／`medium`／`high` 都有對應；Codex 的 `model_reasoning_effort` 對它有效。
 - **評比時要注意**：GPU 是多人共用的，秒數會受別人影響，不能直接和本機模型比；伺服器日誌看得到所有對話內容。
 
+#### 雲端模型 `luna`
+
+OpenAI 的 GPT-6 Luna（`gpt-6-luna`）**只給 Codex 用**：走 Codex 內建的 `openai` provider，用 ChatGPT 帳號的額度，不用 API key。`luna` 只有 `agent-test.sh` 認得，env.sh 沒有這個 `MODEL`（`. env.sh luna` 會報錯）；互動使用時照下方「指令對照」自己指定。
+
+```bash
+. env.sh && codex login                              # 第一次：登入資料存在 .home/codex，不碰 ~/.codex
+scripts/agent-test.sh --model luna review-readme codex   # 紀錄的標籤會加上 [gpt-6-luna]；MODEL=luna 也可以
+```
+
+- `agent-test.sh` 開跑前改查 `codex login status`，沒用 ChatGPT 登入就不跑；codex 以外的 harness 要 API key，直接擋下。
+- `--thinking off` 送的是 `reasoning.effort=none`，Luna 支援。
+- 設定裡的 `model_context_window = 131072` 是給 qwen 的，對 Luna 也一樣有效：Codex 會在 128K 就壓縮 context。
+
 想走 Pi 官方的 router 模式時，改跑 `scripts/serve-router.sh`。router 會依請求的模型名稱（檔名，如 `Qwen3.6-35B-A3B-UD-Q4_K_XL`）自動載入，所以 Codex 等一般用戶端不必先手動載入。Pi 這邊，第一次要在互動模式裡執行 `/login llama.cpp`（key 可留空，會讀 env.sh 匯出的 `LLAMA_API_KEY`，和 `API_KEY` 同值）和 `/llama`，模型清單才會存下來，之後才能用 `pi --model llama.cpp/Qwen3.6-35B-A3B-UD-Q4_K_XL`。執行這兩個指令時 `serve-router.sh` 要在跑。resolute 上已經做過這一步。
 
 - `models/` 裡的檔案都會出現在 `/llama` 的清單裡，包括 FIM 模型，**不要選它**：它會用主模型的參數載入，而且因為 `--models-max 1`，會把主模型卸載。
@@ -231,6 +244,7 @@ MODEL=ds4 scripts/agent-test.sh review-readme pi   # 紀錄的標籤會加上 [d
 | 帶著題目進互動模式 | `pi --model ... "題目"` | `codex "題目"` | `opencode --prompt "題目"` | `qwen -i "題目"` |
 | 換成 GLM | `--model harness-lab/glm-4.7-flash` | `-m glm-4.7-flash -c model_context_window=65536` | `-m harness-lab/glm-4.7-flash` | `-m glm-4.7-flash` |
 | 換成 ds4（遠端） | `--model ds4/deepseek-v4-flash` | `-c model_provider=ds4 -m deepseek-v4-flash` | `-m ds4/deepseek-v4-flash` | `-m deepseek-v4-flash` |
+| 換成 luna（雲端） | 不支援 | `-c model_provider=openai -m gpt-6-luna` | 不支援 | 不支援 |
 | 調思考 | `--thinking off` 或 `medium` | 見下方說明 | 見下方說明 | 見下方說明 |
 | 接續上次對話 | `-c`（最近一次）、`-r`（挑選） | `codex resume --last`、`codex resume` | `-c`、`-s <id>` | `-c`、`-r` |
 | 沙箱 | 無 | `-s read-only`／`workspace-write` | 無 | 無（沒設定 docker） |

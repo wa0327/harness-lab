@@ -1,22 +1,29 @@
 #!/usr/bin/env bash
 # 用同一個題目測不同 harness：複製 evals/<題目> 到 logs/runs/<題目>/<harness>/<日期_時間>/，讓 harness 非互動解題，再自動驗證
-# 用法：scripts/agent-test.sh [--monitor] [--thinking off] <題目> <pi|pi-router|codex|opencode|qwen|claude>   需要先啟動 scripts/serve-main.sh（claude 除外）
+# 用法：scripts/agent-test.sh [--monitor] [--thinking off] [--model <模型>] <題目> <pi|pi-router|codex|opencode|qwen|claude>   需要先啟動 scripts/serve-main.sh（claude 除外）
 # --monitor：執行期間即時顯示 agent 的思考、回覆、工具呼叫與結果（scripts/watch-agent.py）
 # --thinking off：關掉模型的思考，各 harness 用各自實測有效的方法（見下方 thinking_cfg）；claude 沒有關法，直接報錯
+# --model：qwen、glm、ds4（同 env.sh 的 MODEL，蓋過環境變數），或 luna（見下方）
 set -euo pipefail
-source "$(dirname "$0")/../env.sh"
 
-usage="用法：scripts/agent-test.sh [--monitor] [--thinking off] <題目> <pi|pi-router|codex|opencode|qwen|claude>，題目是 evals/ 下的目錄名稱"
+usage="用法：scripts/agent-test.sh [--monitor] [--thinking off] [--model <模型>] <題目> <pi|pi-router|codex|opencode|qwen|claude>，題目是 evals/ 下的目錄名稱"
 monitor="" thinking=""; args=()
 while (( $# )); do
   case "$1" in
     --monitor) monitor=1 ;;
     --thinking) thinking="${2:-}"; shift ;;
     --thinking=*) thinking="${1#*=}" ;;
+    --model) MODEL="${2:?--model 要接模型名稱}"; shift ;;
+    --model=*) MODEL="${1#*=}" ;;
     *) args+=("$1") ;;
   esac
   shift
 done
+# luna（OpenAI 的 GPT-6 Luna）只有這裡用：只給 Codex，走 Codex 內建的 openai provider 和 ChatGPT 帳號的額度
+# （先 source env.sh 再 codex login，登入資料存在 .home/codex）。env.sh 不認得 luna，先拿掉 MODEL 再 source
+luna=""; [[ "${MODEL:-}" != luna ]] || { luna=1; unset MODEL; }
+source "$(dirname "$0")/../env.sh"
+[[ -z "$luna" ]] || MODEL=luna MAIN_PROVIDER=openai MAIN_ALIAS=gpt-6-luna
 [[ -z "$thinking" || "$thinking" == off ]] || { echo "--thinking 只支援 off（不加就是 harness 預設的思考設定）" >&2; exit 2; }
 task="${args[0]:?$usage}"
 harness="${args[1]:?$usage}"
@@ -37,7 +44,12 @@ case "$harness" in pi|pi-router|codex|opencode|qwen|claude) ;; *) echo "未知�
 TIMEOUT="${TIMEOUT:-$(cat "$task_dir/TIMEOUT" 2>/dev/null || echo 1800)}"
 
 # 開跑前確認模型伺服器連得到（本機模型要先跑 serve-main.sh；ds4 是按需開機的遠端主機），免得白跑一輪
-if [[ "$harness" != claude ]]; then
+if [[ -n "$luna" && "$harness" != claude ]]; then
+  # luna 走 Codex 的 ChatGPT 登入，沒有可以 curl 的伺服器，改查登入狀態
+  [[ "$harness" == codex ]] || { echo "MODEL=luna 只支援 codex（用 ChatGPT 帳號的額度，其他 harness 要 API key）" >&2; exit 2; }
+  codex login status 2>&1 | grep -q ChatGPT || {
+    echo "Codex 沒有用 ChatGPT 帳號登入：先 source env.sh 再執行 codex login（登入資料存在 .home/codex）" >&2; exit 1; }
+elif [[ "$harness" != claude ]]; then
   [[ "$harness" != pi-router || -n "$MAIN_FILE" ]] || { echo "pi-router 只能用本機模型，MODEL=$MODEL 是遠端模型" >&2; exit 2; }
   key="$API_KEY"; [[ "$MAIN_PROVIDER" != ds4 ]] || key="$DS4_API_KEY"
   curl -sf -m 10 -o /dev/null -H "Authorization: Bearer $key" "$MAIN_URL/models" || {
