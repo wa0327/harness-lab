@@ -1,0 +1,364 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>gnc-stub 綜合評估</title>
+<style>
+:root {
+  color-scheme: light;
+  --page: #f9f9f7;
+  --surface: #fcfcfb;
+  --ink: #0b0b0b;
+  --ink-2: #52514e;
+  --muted: #898781;
+  --grid: #e1e0d9;
+  --axis: #c3c2b7;
+  --border: rgba(11,11,11,0.10);
+  --s1: #2a78d6;
+  --s-low: #c3c2b7;
+  --good: #0ca30c;
+  --good-text: #006300;
+  --warn: #fab219;
+  --bad: #d03b3b;
+  --code-bg: #f0efec;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --page: #0d0d0d;
+    --surface: #1a1a19;
+    --ink: #ffffff;
+    --ink-2: #c3c2b7;
+    --muted: #898781;
+    --grid: #2c2c2a;
+    --axis: #383835;
+    --border: rgba(255,255,255,0.10);
+    --s1: #3987e5;
+    --s-low: #5a5955;
+    --good-text: #0ca30c;
+    --code-bg: #2c2c2a;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --page: #0d0d0d;
+  --surface: #1a1a19;
+  --ink: #ffffff;
+  --ink-2: #c3c2b7;
+  --muted: #898781;
+  --grid: #2c2c2a;
+  --axis: #383835;
+  --border: rgba(255,255,255,0.10);
+  --s1: #3987e5;
+  --s-low: #5a5955;
+  --good-text: #0ca30c;
+  --code-bg: #2c2c2a;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--page);
+  color: var(--ink);
+  font: 15px/1.7 system-ui, -apple-system, "Segoe UI", "Noto Sans TC", "PingFang TC", sans-serif;
+}
+main { max-width: 1040px; margin: 0 auto; padding: 32px 16px 64px; }
+h1 { font-size: 26px; margin: 0 0 4px; }
+h2 { font-size: 19px; margin: 40px 0 12px; padding-bottom: 6px; border-bottom: 1px solid var(--grid); }
+h3 { font-size: 16px; margin: 24px 0 8px; }
+.sub { color: var(--ink-2); margin: 0 0 20px; }
+code { font: 13px ui-monospace, SFMono-Regular, Menlo, monospace; background: var(--code-bg); padding: 1px 5px; border-radius: 4px; overflow-wrap: anywhere; }
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 16px 18px; }
+.card.bench { border-color: var(--s1); }
+.grid4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+.grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+.grid2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
+@media (max-width: 820px) { .grid4, .grid3 { grid-template-columns: repeat(2, 1fr); } .grid2 { grid-template-columns: 1fr; } }
+@media (max-width: 480px) { .grid4, .grid3 { grid-template-columns: 1fr; } }
+.rank { font-size: 13px; color: var(--muted); }
+.name { font-size: 18px; font-weight: 600; margin: 2px 0; }
+.score { font-size: 34px; font-weight: 600; line-height: 1.1; }
+.score small { font-size: 14px; color: var(--muted); font-weight: 400; }
+.verdict { color: var(--ink-2); font-size: 14px; margin-top: 6px; }
+.tablewrap { overflow-x: auto; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; }
+table { border-collapse: collapse; width: 100%; font-size: 14px; }
+th, td { text-align: left; padding: 8px 12px; border-bottom: 1px solid var(--grid); vertical-align: top; }
+th { color: var(--ink-2); font-weight: 600; white-space: nowrap; }
+tr:last-child td { border-bottom: none; }
+tr.sep td { border-top: 2px solid var(--axis); }
+td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+td.c, th.c { text-align: center; white-space: nowrap; }
+.hit, .part, .miss, .err { display: inline-flex; align-items: center; gap: 4px; font-size: 13px; white-space: nowrap; }
+.hit { color: var(--good-text); }
+.part { color: var(--ink-2); }
+.miss { color: var(--muted); }
+.err { color: var(--bad); }
+.dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; flex: none; }
+.hit .dot { background: var(--good); }
+.part .dot { background: var(--warn); }
+.miss .dot { background: transparent; border: 1.5px solid var(--muted); }
+.err .dot { background: var(--bad); }
+.chart h3 { margin: 0 0 2px; font-size: 15px; }
+.chart .note { color: var(--muted); font-size: 12px; margin: 0 0 10px; }
+.bar-row { display: grid; grid-template-columns: 100px 1fr; align-items: center; gap: 8px; margin: 6px 0; }
+.bar-row .lab { color: var(--ink-2); font-size: 13px; white-space: nowrap; }
+.track { position: relative; height: 20px; }
+.bar { height: 20px; background: var(--s1); border-radius: 0 4px 4px 0; min-width: 2px; }
+.bar-row:hover .bar { filter: brightness(1.12); }
+.val { position: absolute; top: 0; font-size: 12px; line-height: 20px; color: var(--ink); white-space: nowrap; padding-left: 6px; font-variant-numeric: tabular-nums; }
+.stack { display: flex; height: 20px; gap: 2px; }
+.stack span { display: block; height: 20px; color: #fff; font-size: 12px; line-height: 20px; text-align: center; font-variant-numeric: tabular-nums; }
+.stack span:last-child { border-radius: 0 4px 4px 0; }
+.seg-good { background: var(--s1); }
+.seg-low { background: var(--s-low); color: var(--ink) !important; }
+.seg-bad { background: var(--bad); }
+.legend { display: flex; gap: 16px; flex-wrap: wrap; font-size: 13px; color: var(--ink-2); margin: 4px 0 8px; }
+.legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 6px; vertical-align: -1px; }
+.callout { border-left: 3px solid var(--s1); padding: 10px 14px; background: var(--surface); border-radius: 0 8px 8px 0; margin: 12px 0; }
+.callout.bad { border-left-color: var(--bad); }
+ul.tight li { margin: 4px 0; }
+.small { font-size: 13px; color: var(--ink-2); }
+</style>
+</head>
+<body>
+<main>
+
+<h1>gnc-stub 綜合評估</h1>
+<p class="sub">題目：<code>evals/gnc-stub</code>。在隔離的工作目錄寫多旋翼無人機的視覺運動規劃程式 <code>gnc.py</code>，讓 <code>sim.py</code> 的 24 個情境都接觸到目標（滿分 24/24），最後寫 <code>README.md</code>，限時 300 秒。每位考生只取 <code>logs/runs/gnc-stub/</code> 底下最新一次執行，分成兩組：本地組（Codex、OpenCode、Pi、Qwen Code，本地模型 qwen3.6-35b-a3b，思考關閉）與上限標竿（Claude Code，雲端的 claude-opus-5-5）。評估日期 2026-10-09。</p>
+
+<div class="callout">
+  <b>測試條件</b>（五位相同）：<code>agent-test.sh</code> 依題目的 <code>ISOLATE</code> 檔，讓 agent 在 <code>/tmp/agent-work.*</code> 作答。<code>sim.py</code>、<code>test_gnc.py</code> 複製進工作目錄並設成唯讀。題目最後附一句「本題限時 5 分鐘，時間到會直接結束，以當時工作目錄的內容評分」。時間到由 <code>timeout</code> 結束 harness，再用題目原檔的 <code>sim.py</code>、<code>test_gnc.py</code> 對工作目錄裡的 <code>gnc.py</code> 評分，結果記在各 run 的 <code>verify.log</code>。本地組用 <code>--thinking off</code>，四個 harness 各用實測有效的方法關掉思考；Claude Code 沒有關閉思考的方法，照預設執行。
+</div>
+<div class="callout">
+  <b>利益揭露：</b>撰寫這份評估的主考官也是 Claude Opus 5.5，和 Claude Code 考生是同一個模型。為了避免偏袒，通過數一律取自 <code>verify.log</code> 的評分結果，不採用考生自己的說法。Claude 的設計與 README 也逐項對照 <code>sim.py</code> 檢查過，失誤照樣列出。另外，兩組的模型與思考設定不同，所以只在本地組內排名，Claude 的分數只當作參考上限。
+</div>
+<div class="callout bad">
+  <b>排名請保守看待。</b>這是每位考生單次執行的結果。本地組四位只差 1 題（0 或 1/24），分數差距主要來自作答過程，而不是成果。本地模型的取樣有隨機性，同一個 harness 重跑可能就換名次。要比較 harness 本身，每位考生至少要跑 3 次再取平均。
+</div>
+
+<h3>本地組（qwen3.6-35b-a3b，思考關閉）</h3>
+<div class="grid4">
+  <div class="card"><div class="rank">第 1 名</div><div class="name">Codex</div><div class="score">20<small> / 100</small></div><div class="verdict">本地組唯一有通過的（1/24，static）。讀完模擬器、跑了 3 次模擬，也自己抓到偏航符號錯誤。但程式只靠像素做比例控制，沒有換算到世界座標，最後被時間砍掉，沒寫 README。</div></div>
+  <div class="card"><div class="rank">第 2 名</div><div class="name">OpenCode</div><div class="score">19<small> / 100</small></div><div class="verdict">0/24。偏航角速度的符號寫反，飛機在原地打轉。最後它從逐拍紀錄看出了這個問題，診斷正確，但來不及改。trace 寫到工作目錄外的 <code>/tmp</code>。</div></div>
+  <div class="card"><div class="rank">第 3 名</div><div class="name">Pi</div><div class="score">13<small> / 100</small></div><div class="verdict">中間版本有 1/24，但第 299.7 秒用一個沒跑過的新版本蓋掉。新版本只要目標一離開畫面就丟出 <code>NameError</code>，交出去是 0/24，其中 22 個情境崩潰。</div></div>
+  <div class="card"><div class="rank">第 4 名</div><div class="name">Qwen Code</div><div class="score">12<small> / 100</small></div><div class="verdict">0/24，24 個情境全部崩潰：程式第二拍就 <code>IndexError</code>。從頭到尾沒有一個版本能完整跑完一個情境，最終回覆是空的。</div></div>
+</div>
+
+<h3>上限標竿（雲端模型）</h3>
+<div class="grid2">
+  <div class="card bench"><div class="rank">上限標竿</div><div class="name">Claude Code</div><div class="score">82<small> / 100</small></div><div class="verdict">20/24。視線換算有完整用上安裝角與姿態，第一版就有 18/24，改一次垂直增益後到 20/24。67 秒就寫完 README 自己結束，還剩 233 秒沒用，報告卻說是「因為時間限制」沒做完。沒過的 4 題裡，有 3 題最近距離不到 0.2 公尺。</div></div>
+</div>
+
+<h2>評分總表</h2>
+<div class="tablewrap">
+<table>
+  <thead><tr><th>面向（配分）</th><th class="num">Codex</th><th class="num">OpenCode</th><th class="num">Pi</th><th class="num">Qwen Code</th><th class="num">Claude（標竿）</th></tr></thead>
+  <tbody>
+    <tr><td>測試通過：40 × 通過數 ÷ 24，取自 <code>verify.log</code>（40）</td><td class="num">2</td><td class="num">0</td><td class="num">0</td><td class="num">0</td><td class="num">33</td></tr>
+    <tr><td>工程方法：讀懂模擬器與座標慣例、換算正確、改了就驗證（25）</td><td class="num">8</td><td class="num">7</td><td class="num">5</td><td class="num">3</td><td class="num">21</td></tr>
+    <tr><td>時間管理與交付：限時內交出能執行的 <code>gnc.py</code> 和 README（15）</td><td class="num">3</td><td class="num">3</td><td class="num">0</td><td class="num">1</td><td class="num">10</td></tr>
+    <tr><td>規則紀律：不改原檔、只用協定資訊、只讀工作目錄（10）</td><td class="num">6</td><td class="num">8</td><td class="num">7</td><td class="num">6</td><td class="num">10</td></tr>
+    <tr><td>說明與回報：README、最終回覆、繁體中文（10）</td><td class="num">1</td><td class="num">1</td><td class="num">1</td><td class="num">2</td><td class="num">8</td></tr>
+    <tr><th>總分</th><th class="num">20</th><th class="num">19</th><th class="num">13</th><th class="num">12</th><th class="num">82</th></tr>
+  </tbody>
+</table>
+</div>
+<p class="small">本地組四位都在 300 秒時被結束，都沒寫 README，通過數只有 0 或 1。因此分數差距主要來自工程方法與交付：Codex 和 OpenCode 交出能執行的程式，Pi 和 Qwen Code 交出會崩潰的程式。規則紀律扣分有兩種：把 trace 寫到工作目錄外的 <code>/tmp</code> 再讀回來（Codex、OpenCode、Qwen Code），以及把 <code>sim.py</code> 內部的目標尺寸寫進程式來估距離（Codex、Pi、Qwen Code）。題目說「GNC 只能使用協定送來的資訊」，目標尺寸不在協定裡。Claude 在 README 裡明確寫了「目標的實際尺寸協定裡沒給，所以不估計距離」。</p>
+
+<h2>測試結果</h2>
+<div class="card chart">
+  <h3>24 個情境的結果</h3>
+  <div class="legend"><span><i style="background:var(--s1)"></i>通過（接觸）</span><span><i style="background:var(--s-low)"></i>90 秒內未接觸</span><span><i style="background:var(--bad)"></i>gnc.py 崩潰</span></div>
+  <div class="bar-row" title="Claude：通過 20、未接觸 4"><span class="lab">Claude</span><div class="stack" style="width:100%"><span class="seg-good" style="flex:20">20</span><span class="seg-low" style="flex:4">4</span></div></div>
+  <div class="bar-row" title="Codex：通過 1、未接觸 23"><span class="lab">Codex</span><div class="stack" style="width:100%"><span class="seg-good" style="flex:1">1</span><span class="seg-low" style="flex:23">23</span></div></div>
+  <div class="bar-row" title="OpenCode：未接觸 24"><span class="lab">OpenCode</span><div class="stack" style="width:100%"><span class="seg-low" style="flex:24">24</span></div></div>
+  <div class="bar-row" title="Pi：未接觸 2、崩潰 22"><span class="lab">Pi</span><div class="stack" style="width:100%"><span class="seg-low" style="flex:2">2</span><span class="seg-bad" style="flex:22">22</span></div></div>
+  <div class="bar-row" title="Qwen Code：崩潰 24"><span class="lab">Qwen Code</span><div class="stack" style="width:100%"><span class="seg-bad" style="flex:24">24</span></div></div>
+</div>
+
+<h3>逐情境結果</h3>
+<p>格子裡是通過，或沒通過時載具和目標外形的最近距離。載具從離地 10 公尺、靜止、機頭朝北出發；前 14 題的目標在前方 60 公尺、同高度，起始最近距離是 57.6 公尺。最近距離停在 57.6 公尺附近，就表示載具幾乎沒有靠近目標。</p>
+<div class="tablewrap">
+<table>
+  <thead><tr><th>情境</th><th>目標的行為</th><th class="c">Codex</th><th class="c">OpenCode</th><th class="c">Pi</th><th class="c">Qwen</th><th class="c">Claude</th></tr></thead>
+  <tbody>
+    <tr><td><code>static</code></td><td>靜止</td><td class="c"><span class="hit"><span class="dot"></span>通過</span></td><td class="c"><span class="miss"><span class="dot"></span>53.19 m</span></td><td class="c" title="最近 22.867 m"><span class="err"><span class="dot"></span>崩潰</span></td><td class="c" title="最近 57.577 m"><span class="err"><span class="dot"></span>崩潰</span></td><td class="c"><span class="hit"><span class="dot"></span>通過</span></td></tr>
+    <tr><td><code>flee_slow</code></td><td>2 m/s 遠離</td><td class="c"><span class="miss"><span class="dot"></span>3.92 m</span></td><td class="c"><span class="miss"><span class="dot"></span>57.34 m</span></td><td class="c" title="最近 21.98 m"><span class="err"><span class="dot"></span>崩潰</span></td><td class="c" title="最近 57.577 m"><span class="err"><span class="dot"></span>崩潰</span></td><td class="c"><span class="hit"><span class="dot"></span>通過</span></td></tr>
+    <tr><td><code>flee_fast</code></td><td>5 m/s 遠離</td><td class="c"><span class="miss"><span class="dot"></span>20.64 m</span></td><td class="c"><span class="miss"><span class="dot"></span>57.58 m</span></td><td class="c" title="最近 17.861 m"><span class="err"><span class="dot"></span>崩潰</span></td><td class="c" title="最近 57.577 m"><span class="err"><span class="dot"></span>崩潰</span></td><td class="c"><span class="hit"><span class="dot"></span>通過</span></td></tr>
+    <tr><td><code>head_on</code></td><td>3 m/s 迎面而來</td><td class="c"><span class="miss"><span class="dot"></span>0.47 m</span></td><td class="c"><span class="miss"><span class="dot"></span>34.94 m</span></td><td class="c" title="最近 22.733 m"><span class="err"><span class="dot"></span>崩潰</span></td><td class="c" title="最近 57.477 m"><span class="err"><span class="dot"></span>崩潰</span></td><td class="c"><span class="hit"><span class="dot"></span>通過</span></td></tr>
+    <tr><td><code>cross</code></td><td>5 m/s 橫越</td><td class="c"><span class="miss"><span class="dot"></span>20.98 m</span></td><td class="c"><span class="miss"><span class="dot"></span>56.35 m</span></td><td class="c" title="最近 40.894 m"><span class="err"><span class="dot"></span>崩潰</span></td><td class="c" title="最近 58.981 m"><span class="err"><span class="dot"></span>崩潰</span></td><td class="c"><span class="hit"><span class="dot"></span>通過</span></td></tr>
+    <tr><td><code>cross_descend</code></td><td>5 m/s 橫越，同時以 2 m/s 下降</td><td class="c"><span class="miss"><span class="dot"></span>25.29 m</span></td><td class="c"><span class="miss"><span class="dot"></span>56.43 m</span></td><td class="c" title="最近 44.839 m"><span class="err"><span class="dot"></span>崩潰</span></td><td class="c" title="最近 58.981 m"><span class="err"><span class="dot"></span>崩潰</span></td><td class="c"><span class="hit"><span class="dot"></span>通過</span></td></tr>
+    <tr><td><code>flee_cross_descend</code></td><td>斜 45° 遠離，同時下降</td><td class="c"><span class="miss"><span class="dot"></span>54.59 m</span></td><td class="c"><span class="miss"><span class="dot"></span>57.58 m</span></td><td class="c" title="最近 45.99 m"><span class="err"><span class="dot"></span>崩潰</span></td><td class="c" title="最近 57.575 m"><span class="err"><span class="dot"></span>崩潰</span></td><td class="c"><span class="hit"><span class="dot"></span>通過</span></td></tr>
+    <tr><td><code>flee_climb</code></td><td>5 m/s 遠離，同時以 3 m/s 爬升</td><td class="c"><span class="miss"><span class="dot"></span>46.71 m</span></td><td class="c"><span class="miss"><span class="dot"></span>57.58 m</span></td><td class="c" title="最近 31.929 m"><span class="err"><span class="dot"></span>崩潰</span></td><td class="c" title="最近 57.577 m"><span class="err"><span class="dot"></span>崩潰</span></td><td class="c"><span class="hit"><span class="dot"></span>通過</span></td></tr>
+    <tr><td><code>circle</code></td><td>4 m/s 繞圈</td><td class="c"><span class="miss"><span class="dot"></span>20.12 m</span></td><td class="c"><span class="miss"><span class="dot"></span>57.58 m</span></td><td class="c" title="最近 36.962 m"><span class="err"><span class="dot"></span>崩潰</span></td><td class="c" title="最近 57.577 m"><span class="err"><span class="dot"></span>崩潰</span></td><td class="c"><span class="hit"><span class="dot"></span>通過</span></td></tr>
+    <tr><td><code>flee_turn</code></td><td>5 m/s 遠離並轉彎</td><td class="c"><span class="miss"><span class="dot"></span>23.66 m</span></td><td class="c"><span class="miss"><span class="dot"></span>57.58 m</span></td><td class="c" title="最近 42.81 m"><span class="err"><span class="dot"></span>崩潰</span></td><td class="c" title="最近 57.577 m"><span class="err"><span class="dot"></span>崩潰</span></td><td class="c"><span class="hit"><span class="dot"></span>通過</span></td></tr>
+    <tr><td><code>flee_turn_tight</code></td><td>5 m/s 遠離並急轉</td><td class="c"><span class="miss"><span class="dot"></span>10.68 m</span></td><td class="c"><span class="miss"><span class="dot"></span>57.58 m</span></td><td class="c" title="最近 45.536 m"><span class="err"><span class="dot"></span>崩潰</span></td><td class="c" title="最近 57.577 m"><span class="err"><span class="dot"></span>崩潰</span></td><td class="c"><span class="hit"><span class="dot"></span>通過</span></td></tr>
+    <tr><td><code>flee_climb_cross</code></td><td>斜 45° 遠離，同時爬升</td><td class="c"><span class="miss"><span class="dot"></span>51.82 m</span></td><td class="c"><span class="miss"><span class="dot"></span>57.58 m</span></td><td class="c" title="最近 36.237 m"><span class="err"><span class="dot"></span>崩潰</span></td><td class="c" title="最近 57.575 m"><span class="err"><span class="dot"></span>崩潰</span></td><td class="c"><span class="hit"><span class="dot"></span>通過</span></td></tr>
+    <tr><td><code>fast_flee_dive</code></td><td>6 m/s 遠離，同時以 2 m/s 下降</td><td class="c"><span class="miss"><span class="dot"></span>25.26 m</span></td><td class="c"><span class="miss"><span class="dot"></span>57.58 m</span></td><td class="c" title="最近 31.879 m"><span class="err"><span class="dot"></span>崩潰</span></td><td class="c" title="最近 57.577 m"><span class="err"><span class="dot"></span>崩潰</span></td><td class="c"><span class="hit"><span class="dot"></span>通過</span></td></tr>
+    <tr><td><code>flee_dive</code></td><td>5 m/s 遠離，同時以 3 m/s 下降</td><td class="c"><span class="miss"><span class="dot"></span>25.02 m</span></td><td class="c"><span class="miss"><span class="dot"></span>57.58 m</span></td><td class="c" title="最近 35.445 m"><span class="err"><span class="dot"></span>崩潰</span></td><td class="c" title="最近 57.577 m"><span class="err"><span class="dot"></span>崩潰</span></td><td class="c"><span class="miss"><span class="dot"></span>0.18 m</span></td></tr>
+    <tr class="sep"><td><code>far_spiral_descend</code></td><td>200 m 外，12 m/s 螺旋下降到貼地</td><td class="c"><span class="miss"><span class="dot"></span>3.56 m</span></td><td class="c"><span class="miss"><span class="dot"></span>177.15 m</span></td><td class="c" title="最近 50.945 m"><span class="err"><span class="dot"></span>崩潰</span></td><td class="c" title="最近 197.577 m"><span class="err"><span class="dot"></span>崩潰</span></td><td class="c"><span class="miss"><span class="dot"></span>0.11 m</span></td></tr>
+    <tr><td><code>fast_diag_flee</code></td><td>側前方，14 m/s 斜向逃離</td><td class="c"><span class="miss"><span class="dot"></span>59.25 m</span></td><td class="c"><span class="miss"><span class="dot"></span>59.25 m</span></td><td class="c"><span class="miss"><span class="dot"></span>59.25 m</span></td><td class="c" title="最近 59.246 m"><span class="err"><span class="dot"></span>崩潰</span></td><td class="c"><span class="hit"><span class="dot"></span>通過</span></td></tr>
+    <tr><td><code>fast_flee_ground</code></td><td>100 m 外貼地，15 m/s 逃離</td><td class="c"><span class="miss"><span class="dot"></span>97.95 m</span></td><td class="c"><span class="miss"><span class="dot"></span>97.95 m</span></td><td class="c" title="最近 97.95 m"><span class="err"><span class="dot"></span>崩潰</span></td><td class="c" title="最近 97.95 m"><span class="err"><span class="dot"></span>崩潰</span></td><td class="c"><span class="miss"><span class="dot"></span>0.09 m</span></td></tr>
+    <tr><td><code>far_static</code></td><td>200 m 外貼地，靜止</td><td class="c"><span class="miss"><span class="dot"></span>2.47 m</span></td><td class="c"><span class="miss"><span class="dot"></span>194.26 m</span></td><td class="c" title="最近 26.374 m"><span class="err"><span class="dot"></span>崩潰</span></td><td class="c" title="最近 197.762 m"><span class="err"><span class="dot"></span>崩潰</span></td><td class="c"><span class="hit"><span class="dot"></span>通過</span></td></tr>
+    <tr><td><code>far_flee</code></td><td>200 m 外貼地，10 m/s 逃離</td><td class="c"><span class="miss"><span class="dot"></span>197.76 m</span></td><td class="c"><span class="miss"><span class="dot"></span>197.76 m</span></td><td class="c"><span class="miss"><span class="dot"></span>197.76 m</span></td><td class="c" title="最近 197.762 m"><span class="err"><span class="dot"></span>崩潰</span></td><td class="c"><span class="hit"><span class="dot"></span>通過</span></td></tr>
+    <tr><td><code>far_turn_wide</code></td><td>200 m 外貼地，10 m/s 緩轉</td><td class="c"><span class="miss"><span class="dot"></span>13.91 m</span></td><td class="c"><span class="miss"><span class="dot"></span>183.83 m</span></td><td class="c" title="最近 64.505 m"><span class="err"><span class="dot"></span>崩潰</span></td><td class="c" title="最近 197.762 m"><span class="err"><span class="dot"></span>崩潰</span></td><td class="c"><span class="hit"><span class="dot"></span>通過</span></td></tr>
+    <tr><td><code>far_turn</code></td><td>200 m 外貼地，10 m/s 轉彎</td><td class="c"><span class="miss"><span class="dot"></span>4.10 m</span></td><td class="c"><span class="miss"><span class="dot"></span>180.56 m</span></td><td class="c" title="最近 48.984 m"><span class="err"><span class="dot"></span>崩潰</span></td><td class="c" title="最近 197.762 m"><span class="err"><span class="dot"></span>崩潰</span></td><td class="c"><span class="hit"><span class="dot"></span>通過</span></td></tr>
+    <tr><td><code>far_turn_fast</code></td><td>200 m 外貼地，15 m/s 急轉</td><td class="c"><span class="miss"><span class="dot"></span>2.59 m</span></td><td class="c"><span class="miss"><span class="dot"></span>182.30 m</span></td><td class="c" title="最近 48.141 m"><span class="err"><span class="dot"></span>崩潰</span></td><td class="c" title="最近 197.762 m"><span class="err"><span class="dot"></span>崩潰</span></td><td class="c"><span class="miss"><span class="dot"></span>1.01 m</span></td></tr>
+    <tr><td><code>far_turn_tight</code></td><td>200 m 外貼地，10 m/s 小半徑繞圈</td><td class="c"><span class="miss"><span class="dot"></span>2.48 m</span></td><td class="c"><span class="miss"><span class="dot"></span>188.42 m</span></td><td class="c" title="最近 46.419 m"><span class="err"><span class="dot"></span>崩潰</span></td><td class="c" title="最近 197.762 m"><span class="err"><span class="dot"></span>崩潰</span></td><td class="c"><span class="hit"><span class="dot"></span>通過</span></td></tr>
+    <tr><td><code>cruise_straight</code></td><td>100 m 外貼地，9 m/s 直行</td><td class="c"><span class="miss"><span class="dot"></span>54.02 m</span></td><td class="c"><span class="miss"><span class="dot"></span>97.95 m</span></td><td class="c" title="最近 28.459 m"><span class="err"><span class="dot"></span>崩潰</span></td><td class="c" title="最近 97.95 m"><span class="err"><span class="dot"></span>崩潰</span></td><td class="c"><span class="hit"><span class="dot"></span>通過</span></td></tr>
+    <tr><th></th><th>通過數（滿分 24）</th><th class="c">1</th><th class="c">0</th><th class="c">0</th><th class="c">0</th><th class="c">20</th></tr>
+  </tbody>
+</table>
+</div>
+<p class="small">Claude 沒過的 4 題裡，有 3 題最近距離不到 0.2 公尺，都是目標在下降或貼地，載具在高度上差一點。<code>far_turn_fast</code>（15 m/s 又急轉）錯過後沒有繞回來。Codex 的 <code>head_on</code> 從目標下方 0.47 公尺擦過，<code>far_*</code> 系列都因為高度下限設在 4 公尺，從目標上方飛過。Pi 的崩潰全發生在目標第一次離開畫面時；Qwen Code 第二拍就崩潰，所以最近距離都還是起始值。</p>
+
+<h2>作答過程</h2>
+<div class="tablewrap">
+<table>
+  <thead><tr><th>項目</th><th>Codex</th><th>OpenCode</th><th>Pi</th><th>Qwen Code</th><th>Claude</th></tr></thead>
+  <tbody>
+    <tr><td>讀完 <code>sim.py</code></td><td>有（輸出被截斷後分兩段重讀）</td><td>有</td><td>有</td><td>有</td><td>有（分兩段）</td></tr>
+    <tr><td>用姿態與安裝角把目標框換成世界系視線</td><td><span class="miss"><span class="dot"></span>沒有</span>，只用像素偏移</td><td><span class="miss"><span class="dot"></span>沒有</span>，只用像素偏移</td><td><span class="err"><span class="dot"></span>做了但錯</span>，安裝角轉反、座標系混用</td><td><span class="miss"><span class="dot"></span>沒有</span>，安裝角算了沒用</td><td><span class="hit"><span class="dot"></span>正確</span></td></tr>
+    <tr><td>有 <code>gnc.py</code> 之後跑模擬的次數</td><td>3（1、1、1/4）</td><td>4（全部 0）</td><td>2（static 1/1、全部 1/24）</td><td>3（全部崩潰）</td><td>2（18、20）＋ unittest 1</td></tr>
+    <tr><td>過程中最好的成績</td><td>1/24</td><td>0/24</td><td>1/24</td><td>0/24</td><td>20/24</td></tr>
+    <tr><td>交出的成績</td><td>1/24</td><td>0/24</td><td>0/24</td><td>0/24</td><td>20/24</td></tr>
+    <tr><td>最後一版寫入時間</td><td>約第 228 秒</td><td>約第 178 秒</td><td>第 299.7 秒</td><td>約第 208 秒</td><td>第 64 秒以前</td></tr>
+    <tr><td>最後一版有沒有跑過</td><td>有</td><td>有（只跑 static）</td><td><span class="err"><span class="dot"></span>沒有</span></td><td>有，跑了就崩潰</td><td>有</td></tr>
+    <tr><td>結束時在做什麼</td><td>看完 trace，正在產生第三版</td><td>看出偏航符號反了，正要改</td><td>剛寫完新版，0.3 秒後時間到</td><td>找到崩潰原因，正在整檔重寫</td><td>寫完 README 自己結束，剩 233 秒</td></tr>
+    <tr><td>README / 最終回覆</td><td>無 / 英文片段</td><td>無 / 英文片段</td><td>無 / 英文片段</td><td>無 / 空白</td><td>有 / 繁中完整</td></tr>
+  </tbody>
+</table>
+</div>
+<p class="small">本地模型的生成速度約每秒 35 token。四位都是每次整檔重寫 <code>gnc.py</code>，一次 2–4K token，要 60–117 秒，5 分鐘內最多只來得及寫兩輪。Codex、Pi、Qwen Code 的事件流沒有時間戳，時間是用檔案修改時間推估的。</p>
+
+<h2>資源用量</h2>
+<div class="grid2">
+  <div class="card chart">
+    <h3>送出 prompt 總量（千 token）</h3>
+    <p class="note">含快取命中。Codex 在回合結束前就被結束，沒有回報用量</p>
+    <div class="bar-row" title="Pi：117,454 token"><span class="lab">Pi</span><div class="track"><div class="bar" style="width:34.6%"></div><span class="val" style="left:34.6%">117.5K</span></div></div>
+    <div class="bar-row" title="Claude：183,911 token，費用 0.33 美元"><span class="lab">Claude</span><div class="track"><div class="bar" style="width:54.3%"></div><span class="val" style="left:54.3%">183.9K</span></div></div>
+    <div class="bar-row" title="Qwen Code：233,823 token"><span class="lab">Qwen Code</span><div class="track"><div class="bar" style="width:69%"></div><span class="val" style="left:69%">233.8K</span></div></div>
+    <div class="bar-row" title="OpenCode：288,133 token，其中一次 cat 整份 trace 約 47K"><span class="lab">OpenCode</span><div class="track"><div class="bar" style="width:85%"></div><span class="val" style="left:85%">288.1K</span></div></div>
+  </div>
+  <div class="card chart">
+    <h3>生成量（千 token）</h3>
+    <p class="note">Claude 含思考 853 token；本地組思考關閉</p>
+    <div class="bar-row" title="Qwen Code：4,569 token"><span class="lab">Qwen Code</span><div class="track"><div class="bar" style="width:39.7%"></div><span class="val" style="left:39.7%">4.6K</span></div></div>
+    <div class="bar-row" title="OpenCode：5,460 token"><span class="lab">OpenCode</span><div class="track"><div class="bar" style="width:47.4%"></div><span class="val" style="left:47.4%">5.5K</span></div></div>
+    <div class="bar-row" title="Claude：5,491 token（思考 853）"><span class="lab">Claude</span><div class="track"><div class="bar" style="width:47.7%"></div><span class="val" style="left:47.7%">5.5K</span></div></div>
+    <div class="bar-row" title="Pi：9,786 token"><span class="lab">Pi</span><div class="track"><div class="bar" style="width:85%"></div><span class="val" style="left:85%">9.8K</span></div></div>
+  </div>
+</div>
+
+<div class="tablewrap" style="margin-top:12px">
+<table>
+  <thead><tr><th>指標</th><th class="num">Codex</th><th class="num">OpenCode</th><th class="num">Pi</th><th class="num">Qwen Code</th><th class="num">Claude</th></tr></thead>
+  <tbody>
+    <tr><td>模型</td><td class="num" colspan="4" style="text-align:center">qwen3.6-35b-a3b（本地，思考關閉）</td><td class="num">claude-opus-5-5</td></tr>
+    <tr><td>執行目錄</td><td class="num"><code>20261009_080644</code></td><td class="num"><code>20261009_081336</code></td><td class="num"><code>20261009_075907</code></td><td class="num"><code>20261009_081917</code></td><td class="num"><code>20261008_205023</code></td></tr>
+    <tr><td>秒數</td><td class="num">300</td><td class="num">300</td><td class="num">300</td><td class="num">301</td><td class="num">67</td></tr>
+    <tr><td>結束方式</td><td class="num">時間到</td><td class="num">時間到</td><td class="num">時間到</td><td class="num">時間到</td><td class="num">自行結束</td></tr>
+    <tr><td>模型回應次數</td><td class="num">≈7</td><td class="num">12</td><td class="num">11</td><td class="num">9</td><td class="num">6</td></tr>
+    <tr><td>送出 prompt（tok）</td><td class="num">—</td><td class="num">288,133</td><td class="num">117,454</td><td class="num">233,823</td><td class="num">183,911</td></tr>
+    <tr><td>其中快取命中</td><td class="num">—</td><td class="num">218,484</td><td class="num">101,865</td><td class="num">214,378</td><td class="num">160,294</td></tr>
+    <tr><td>生成（tok）</td><td class="num">—</td><td class="num">5,460</td><td class="num">9,786</td><td class="num">4,569</td><td class="num">5,491</td></tr>
+    <tr><td>工具呼叫</td><td class="num">11</td><td class="num">13</td><td class="num">11</td><td class="num">10</td><td class="num">5</td></tr>
+    <tr><td>費用</td><td class="num">—</td><td class="num">—</td><td class="num">—</td><td class="num">—</td><td class="num">US$0.33</td></tr>
+  </tbody>
+</table>
+</div>
+<p class="small">資料來源：<code>scripts/compare-runs.py --latest gnc-stub</code> 與各 run 的 <code>agent.jsonl</code>。Codex 的回應次數是估計值。這一輪沒有人用子 agent。</p>
+
+<h2>設計錯誤與違規</h2>
+<p>主考官對照 <code>sim.py</code> 的座標慣例檢查交出的 <code>gnc.py</code>，並複製到暫存目錄跑單一情境、看逐拍紀錄確認。行號以交出的 <code>gnc.py</code> 為準。</p>
+<div class="tablewrap">
+<table>
+  <thead><tr><th>考生</th><th>問題</th><th>影響</th></tr></thead>
+  <tbody>
+    <tr><td>Codex</td><td>垂直方向直接用 <code>v_up = -cy_norm*4</code>（第 140 行），沒有補償 15° 上仰安裝角和機身俯仰</td><td><span class="err"><span class="dot"></span>錯</span> 全力加速時機身前傾約 35°，同高度的目標在畫面上從 cy=0.80 跳到 0.09，載具誤判而爬升。<code>head_on</code> 停在 8.7 公尺高，從目標下方擦過。</td></tr>
+    <tr><td>Codex</td><td>高度下限 4 公尺（第 181–184 行）；前進速度上限 10 m/s，接近時再按估計距離減速</td><td><span class="err"><span class="dot"></span>錯</span> 碰不到離地 0.75 公尺的目標，<code>far_*</code> 系列都從上方飛過。<code>flee_slow</code> 減速到和目標同速，跟在後面約 6.6 公尺。</td></tr>
+    <tr><td>Codex</td><td>跟丟目標的分支先把 <code>last_det</code> 設成 None 再判斷（第 100–106 行）；側向速度符號反了（第 134 行）</td><td><span class="err"><span class="dot"></span>bug</span> 那個分支永遠不會執行，跟丟後只會以 2 m/s 直飛；目標在左時反而往右移。</td></tr>
+    <tr><td>OpenCode</td><td><code>yaw_rate = -cx_offset/fx*k</code>（第 112 行），第 108 行的註解寫「向左轉（yaw_rate &gt; 0）」</td><td><span class="err"><span class="dot"></span>錯</span> <code>sim.py</code> 規定 yaw_rate 順時針（右轉）為正。目標偏左時反而右轉，形成正回授，飛機在原地打轉。濾波初值設 0 像素，第一拍就卡在 60°/s 上限。</td></tr>
+    <tr><td>OpenCode</td><td><code>v_up</code> 恆為 0；中遠距離 <code>v_fwd</code> 只有 5 m/s</td><td><span class="part"><span class="dot"></span>設計不足</span> 主考官只修正偏航符號，結果是 2/24；其餘情境被高度與速度擋住。</td></tr>
+    <tr><td>Pi</td><td>搜尋分支用到沒定義的變數 <code>v_right</code>（第 230 行）</td><td><span class="err"><span class="dot"></span>崩潰</span> 目標一離開畫面就丟出 <code>NameError</code>，24 題裡有 22 題崩潰。這個版本在時間到前 0.3 秒寫入，從沒跑過。</td></tr>
+    <tr><td>Pi</td><td><code>yaw_rate</code> 用 <code>math.degrees()</code> 送出；安裝角用正轉公式來反轉；把 FLU 向量乘上 FRD 的旋轉矩陣</td><td><span class="err"><span class="dot"></span>錯</span> 偏航增益放大 57 倍，變成貼著上限的開關式控制。視線方向差約 30°，垂直方向反了：中間版本 13 題墜地，就是這個原因。</td></tr>
+    <tr><td>Qwen Code</td><td>條件寫 <code>len &gt;= 2</code>，卻讀 <code>det_history[-3]</code>（第 160 行）</td><td><span class="err"><span class="dot"></span>崩潰</span> 第二拍就 <code>IndexError</code>，24 題全部崩潰。主考官只修這一行，結果是 1/24，另有 7 題墜地。</td></tr>
+    <tr><td>Qwen Code</td><td>cx 偏右時輸出負的 <code>yaw_rate</code> 和 <code>v_right</code>；安裝角算了沒用，把目標拉向光軸中心</td><td><span class="err"><span class="dot"></span>錯</span> 左右反向；同高的目標本來就在光軸下方 15°，載具會一路往下飛。</td></tr>
+    <tr><td>Codex、Pi、Qwen Code</td><td>把 <code>sim.py</code> 內部的目標尺寸 <code>TARGET_HALF</code> 寫進程式來估距離；Pi 另把估計距離的初值寫死成 60（情境的起點距離）</td><td><span class="part"><span class="dot"></span>違規（輕）</span> 題目規定只能用協定送來的資訊，目標尺寸不在協定裡。</td></tr>
+    <tr><td>Codex、OpenCode、Qwen Code</td><td><code>--trace</code> 寫到 <code>/tmp/trace</code>、<code>/tmp/gnc_trace</code>，再讀回來</td><td><span class="part"><span class="dot"></span>違規（輕）</span> 題目規定只讀工作目錄裡的檔案。這兩個目錄會留在系統上，裡面還有其他次執行留下的檔案（見下方隔離檢查）。</td></tr>
+    <tr><td>Claude</td><td>報告說改進方向「因為時間限制都還沒做」</td><td><span class="part"><span class="dot"></span>說法不實</span> 它在第 64 秒自行結束，限時還剩 233 秒。README 裡 4 題的失敗原因是推測，沒有用 trace 驗證。</td></tr>
+  </tbody>
+</table>
+</div>
+
+<h2>各考生評語</h2>
+
+<h3>Codex：20 分（本地組第 1）</h3>
+<ul class="tight">
+  <li><b>過程：</b><code>cat sim.py</code> 被截斷後，改用 <code>head</code> 和 <code>sed</code> 分兩段讀完。寫第一版、全跑一次得到 1/24，看出偏航符號反了，整檔重寫第二版，再跑一次還是 1/24。接著用 <code>--trace</code> 跑 4 個情境看逐拍紀錄，產生第三版時時間到。</li>
+  <li><b>強項：</b>工作流程是對的：讀模擬器、跑、看 trace、改。本地組只有它交出能通過一題的程式。</li>
+  <li><b>弱項：</b>不懂座標換算，沒用 <code>att</code> 和 <code>vel_ned</code>，只用像素偏移做比例控制。高度下限 4 公尺、前進速度上限 10 m/s 都太保守，跟丟分支還有 bug。分析時把相機水平半視角算成約 ±82°（實際約 ±38.7°）。過程回覆全是英文，沒寫 README。</li>
+</ul>
+
+<h3>OpenCode：19 分</h3>
+<ul class="tight">
+  <li><b>過程：</b>讀完 <code>sim.py</code>，第 90 秒寫出第一版，第一次跑就墜地。它判斷是一直下令下降造成的，判斷正確，於是在第 178 秒重寫。之後 <code>cat</code> 整份 trace，約 47K token 灌進上下文，這一步花了 72 秒。第 258 秒看出偏航方向反了，正要改時時間到。</li>
+  <li><b>強項：</b>會用 trace 找問題，墜地和打轉兩次診斷都對。有用 todo 清單規劃。</li>
+  <li><b>弱項：</b>動手前沒有對照 <code>sim.py</code> 的符號慣例，註解寫的方向本身就錯。策略只有影像比例控制，不調高度、速度偏低；就算修好符號也只有 2/24。過程回覆全是英文，註解混用「跟蹤」「搜索」這類陸式用語。</li>
+</ul>
+
+<h3>Pi：13 分</h3>
+<ul class="tight">
+  <li><b>過程：</b>還沒有 <code>gnc.py</code> 就跑了 3 次 <code>sim.py</code>，第 3 次和第 2 次一模一樣。接著花 50 秒用 Python 算視野，卻把目標當成在機下 10 公尺（實際同高），算出和實際對不上的結果，在這裡打轉。第一版寫了 117 秒，跑出 1/24。之後重寫 93 秒，第 299.7 秒寫入，時間就到了。</li>
+  <li><b>強項：</b>有完整讀完 <code>sim.py</code>，也嘗試做座標換算，是本地組唯一有試的。所有路徑都在工作目錄內。</li>
+  <li><b>弱項：</b>換算本身錯了好幾處（安裝角方向、FRD 和 FLU 混用、yaw_rate 單位）。最致命的是時間管理：在時間到前一刻用沒跑過的版本，蓋掉了能過 1 題的版本。<code>agent.jsonl</code> 有 2.6MB，是因為 9,105 筆逐 token 串流事件，不是因為工具輸出。過程回覆全是英文。</li>
+</ul>
+
+<h3>Qwen Code：12 分</h3>
+<ul class="tight">
+  <li><b>過程：</b>讀完 <code>sim.py</code>（摘要裡把情境數說成 23 個）。第一版把 <code>import math</code> 放在 <code>main()</code> 裡，全部崩潰；它判斷出原因，接著在約第 208 秒整檔重寫，還是全部崩潰。用 trace 的 stderr 找到 <code>IndexError</code> 後決定「徹底重寫」，重寫到一半時間到。</li>
+  <li><b>強項：</b>會看 stderr 找崩潰原因；過程回覆和註解都用繁體中文（只有一處「大胆」）。</li>
+  <li><b>弱項：</b>一次寫一大段卻不先做最小驗證，找到一行就能修的 bug 時選擇整檔重寫。就算不崩潰，設計也有左右反向、沒用安裝角的問題，最高前進速度只有 4 m/s。最終回覆是空的。</li>
+</ul>
+
+<h3>Claude Code（上限標竿）：82 分</h3>
+<ul class="tight">
+  <li><b>過程：</b>只用 5 次 Bash：兩次讀 <code>sim.py</code>；一次寫出 <code>gnc.py</code> 並全跑（18/24）；一次把垂直增益加倍再全跑（20/24）；最後一次寫 README 並跑 <code>unittest</code> 確認。共 67 秒、0.33 美元。</li>
+  <li><b>強項：</b>五位裡只有它把目標框正確換成世界系視線：像素、相機系、安裝角、機體 FRD，再乘姿態矩陣到 NED。所有參數都從 <code>init</code> 讀，不寫死。導引是純追蹤加上視線率前置量，速度 24 m/s，另有最低高度保護、跟丟時外推、從沒看到目標時的搜尋。README 的架構、設計決策、逐題結果都寫齊了。</li>
+  <li><b>弱項：</b>只花了限時的五分之一，報告卻說改進方向是「因為時間限制都還沒做」。沒過的 4 題有 3 題只差不到 0.2 公尺，照它自己列的方向（末段用框的上下位置修正高度）很可能還能多過幾題。README 的失敗原因是推測，沒用 trace 驗證。</li>
+</ul>
+
+<h2>隔離檢查</h2>
+<p>五位都沒有改 <code>sim.py</code>、<code>test_gnc.py</code>（兩個檔案本來就設成唯讀，<code>meta.json</code> 也記錄「未改」），也沒有 import <code>sim</code> 去讀模擬器內部狀態，或依情境名稱寫死行為。工作目錄以外的存取如下：</p>
+<div class="tablewrap">
+<table>
+  <thead><tr><th>harness</th><th>工作目錄以外的路徑</th><th>影響</th></tr></thead>
+  <tbody>
+    <tr><td>Codex</td><td>寫入再讀回 <code>/tmp/trace/</code>，裡面還留著前一天其他次執行的檔案</td><td>這次讀的是自己剛寫的 csv，沒有用到別人的檔案</td></tr>
+    <tr><td>OpenCode</td><td>寫入再讀回 <code>/tmp/gnc_trace*</code></td><td>讀的是自己產生的檔案</td></tr>
+    <tr><td>Qwen Code</td><td>寫入再讀回 <code>/tmp/gnc_trace/</code>：這個目錄的修改時間早於它開跑，是 OpenCode 那次執行留下的</td><td>這次覆寫了 static 的紀錄再讀，沒有讀到 OpenCode 的內容；但不同考生之間可以經 <code>/tmp</code> 互相看到檔案</td></tr>
+    <tr><td>Pi、Claude</td><td>沒有</td><td>—</td></tr>
+  </tbody>
+</table>
+</div>
+<p class="small"><code>ISOLATE</code> 只把作答目錄放到 <code>/tmp/agent-work.*</code>，並檢查題目原檔有沒有被改。<code>/tmp</code> 底下其他位置的寫入既擋不住，也不會記錄。</p>
+
+<h2>給 harness-lab 的附帶發現</h2>
+<ul class="tight">
+  <li><b>5 分鐘對本地組太緊</b>：本地模型生成約每秒 35 token，整檔重寫一次 <code>gnc.py</code> 要 1–2 分鐘，四位都只來得及寫兩輪，沒有人留時間寫 README。如果想看本地組能不能把這題做出來，可以另跑一組較長的限時；如果想看時間管理，就維持 5 分鐘。</li>
+  <li><b>本地組的共同弱點是座標慣例</b>：四位都讀完了 <code>sim.py</code>，但三位寫出左右或偏航符號相反的控制，四位都沒有正確補償 15° 安裝角。<code>sim.py</code> 開頭的文件字串把慣例寫得很清楚，問題出在寫程式時沒有回頭核對。</li>
+  <li><b>「時間到前一刻覆寫」是新的失敗模式</b>：Pi 讓一個能過 1 題的版本，被沒跑過的版本蓋掉。題目可以提示「改版前先另存檔案，驗證過再換上」，或讓 <code>agent-test.sh</code> 記錄每次寫入的版本，方便事後分析。</li>
+  <li><b>雲端模型不知道已經過了多久</b>：Claude 只用了 64 秒，卻以為時間不夠。題目可以說明怎麼看經過時間（例如用 <code>date</code> 對照開始時間），或由 harness 在工作目錄放開始時間。</li>
+  <li><b>隔離的漏洞</b>：<code>/tmp</code> 是所有執行共用的，建議在 <code>agent-test.sh</code> 給每次執行獨立的 <code>TMPDIR</code>，或在題目裡要求 trace 寫在工作目錄內。</li>
+  <li><b>語言要求</b>：Codex、OpenCode、Pi 的過程回覆都是英文。思考關閉後，模型沒有照題目要求使用繁體中文；只有 Qwen Code 全程用繁體中文。</li>
+</ul>
+
+<h2>結論</h2>
+<p>本地組四位都讀完了模擬器，但在 5 分鐘內沒有人寫出能接近目標的程式：Codex 1/24，其餘三位 0/24，其中 Pi、Qwen Code 交出的程式會崩潰。分數差距主要在<b>交出的東西能不能跑</b>：Codex 和 OpenCode 交出能執行的程式，排第 1、2 名；Pi 在最後一刻把能跑的版本蓋掉，Qwen Code 從沒有一個版本跑得完，排第 3、4 名。</p>
+<p>這一題的難點在把目標框換算成世界座標的視線：要用上相機內參、15° 安裝角與飛控姿態。本地組沒有人做對，所以只能拿像素偏移做比例控制，結果不是打轉、墜地，就是追不上。換 harness 補不了這一點，這是模型能力的差距。</p>
+<p>Claude 一次就寫對換算，67 秒做到 20/24，但沒用完限時就收尾，還把原因說成時間不夠。所以 20/24 不是它的上限，比較像是它沒把題目做完時的成績。</p>
+
+</main>
+</body>
+</html>
