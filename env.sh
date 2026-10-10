@@ -31,8 +31,9 @@ if [[ ${#BASH_SOURCE[@]} -eq 1 && -n "${1:-}" ]]; then
   unset $_LAB_PER_MODEL
 fi
 export MODEL="${MODEL:-qwen}"
-# 在已 source 過的 shell 裡換 MODEL 時，清掉上一個模型帶進來的值（和上次算出的值不同，代表是手動覆寫，保留）
-if [[ -n "${_LAB_MODEL:-}" && "$_LAB_MODEL" != "$MODEL" ]]; then
+# 在已 source 過的 shell 裡重新 source 時，清掉上次算出的值，好依目前的 MODEL 和 env.local.sh 重算
+# （和上次算出的值不同，代表是手動覆寫，保留）
+if [[ -n "${_LAB_MODEL:-}" ]]; then
   for _v in $_LAB_PER_MODEL; do
     _prev="_LAB_$_v"; [[ "${!_v:-}" == "${!_prev:-}" ]] && unset "$_v"
   done
