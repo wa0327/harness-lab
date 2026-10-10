@@ -1,12 +1,13 @@
 #!/usr/bin/env bash
 # 用同一個題目測不同 harness：複製 evals/<題目> 到 logs/runs/<題目>/<harness>/<日期_時間>/，讓 harness 非互動解題，再自動驗證
-# 用法：scripts/agent-test.sh [--monitor] [--thinking off] [--model <模型>] <題目> <pi|pi-router|codex|opencode|qwen|claude>   需要先啟動 scripts/serve-main.sh（claude 除外）
+# 用法：scripts/agent-test.sh [--monitor] [--thinking off] [--model <模型>] <題目> <pi|pi-router|codex|opencode|qwen|harness|claude>   需要先啟動 scripts/serve-main.sh（claude 除外）
+# harness 是本專案自製的極簡 harness（harness/ 模組），目前只接本機的 Qwen
 # --monitor：執行期間即時顯示 agent 的思考、回覆、工具呼叫與結果（scripts/watch-agent.py）
 # --thinking off：關掉模型的思考，各 harness 用各自實測有效的方法（見下方 thinking_cfg）；claude 沒有關法，直接報錯
 # --model：qwen、glm、ds4（同 env.sh 的 MODEL，蓋過環境變數），或 luna（見下方）
 set -euo pipefail
 
-usage="用法：scripts/agent-test.sh [--monitor] [--thinking off] [--model <模型>] <題目> <pi|pi-router|codex|opencode|qwen|claude>，題目是 evals/ 下的目錄名稱"
+usage="用法：scripts/agent-test.sh [--monitor] [--thinking off] [--model <模型>] <題目> <pi|pi-router|codex|opencode|qwen|harness|claude>，題目是 evals/ 下的目錄名稱"
 monitor="" thinking=""; args=()
 while (( $# )); do
   case "$1" in
@@ -37,7 +38,8 @@ SNAPSHOT_DIR=/tmp/agent-snapshots
 
 task_dir="$LAB_DIR/evals/$task"
 [[ -d "$task_dir" ]] || { echo "沒有這個題目：evals/$task" >&2; exit 2; }
-case "$harness" in pi|pi-router|codex|opencode|qwen|claude) ;; *) echo "未知的 harness：$harness" >&2; exit 2 ;; esac
+case "$harness" in pi|pi-router|codex|opencode|qwen|harness|claude) ;; *) echo "未知的 harness：$harness" >&2; exit 2 ;; esac
+[[ "$harness" != harness || ( -z "$luna" && "$MODEL" == qwen ) ]] || { echo "harness 目前只接本機的 Qwen（MODEL=qwen）" >&2; exit 2; }
 # Claude Code 的 alwaysThinkingEnabled=false、CLAUDE_CODE_DISABLE_THINKING=1 實測都關不掉 Opus 5.5 的思考
 [[ "$thinking" != off || "$harness" != claude ]] || { echo "claude 沒有關掉思考的方法，不支援 --thinking off" >&2; exit 2; }
 # 限時（秒）：命令列的 TIMEOUT 優先，其次是題目目錄的 TIMEOUT 檔，都沒有就 1800。時間到就結束 harness，照常評分
@@ -79,12 +81,13 @@ trap 'declare -F stop_harness > /dev/null && stop_harness; rm -rf "${tmp_dirs[@]
 # --thinking off：伺服器開了 --reasoning off 也不夠，Pi 每個請求都自己帶 enable_thinking=true 蓋過伺服器預設。
 # 以下各 harness 的關法都經 logproxy 側錄請求、對 llama-server 實測過：伺服器只認 chat_template_kwargs 的
 # enable_thinking=false 和 reasoning effort "none"（minimal、low 照樣思考）
-codex_thinking=()
+codex_thinking=() harness_thinking=()
 if [[ "$thinking" == off ]]; then
   thinking_cfg="$(mktemp -d)"; tmp_dirs+=("$thinking_cfg")
   case "$harness" in
     pi|pi-router) PI_THINKING=off ;;   # 送 enable_thinking=false，取樣參數也自動換成不思考用的
     codex) codex_thinking=(-c 'model_reasoning_effort="none"') ;;   # 送 reasoning.effort=none
+    harness) harness_thinking=(--thinking off) ;;   # 送 enable_thinking=false，取樣參數換成不思考用的
     opencode)
       # 疊加一份設定讓這個模型送 reasoning_effort=none（內建的 --variant none 對自訂模型沒作用，什麼都不送）
       printf '{"provider":{"%s":{"models":{"%s":{"options":{"reasoningEffort":"none"}}}}}}\n' "$MAIN_PROVIDER" "$MAIN_ALIAS" > "$thinking_cfg/opencode.json"
@@ -240,6 +243,10 @@ case "$harness" in
   qwen)
     # 沒有沙箱（-y 自動核准所有工具）；--chat-recording false 相當於 Pi 的 --no-session
     (cd "$work" && QWEN_CODE_SUPPRESS_YOLO_WARNING=1 timeout "$TIMEOUT" qwen -o stream-json -y --chat-recording false -m "$MAIN_ALIAS" "$prompt") \
+      > "$run/agent.jsonl" 2> "$run/agent.stderr" ;;
+  harness)
+    # 沒有沙箱；事件格式照 Pi，compare-runs.py、watch-agent.py 直接沿用 Pi 的解析。key 用環境變數傳，不放命令列
+    (cd "$work" && HARNESS_API_KEY="$key" timeout "$TIMEOUT" python3 -I "$LAB_DIR/harness" --base-url "$MAIN_URL" --model "$MAIN_ALIAS" --ctx "$CTX" "${harness_thinking[@]}" "$prompt") \
       > "$run/agent.jsonl" 2> "$run/agent.stderr" ;;
   claude)
     # 用家目錄裡的 Claude Code 和你的登入，不另外設定。

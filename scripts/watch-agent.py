@@ -206,7 +206,7 @@ def anthropic_style(e):
                 result(text_of(b.get("content")), bool(b.get("is_error")))
 
 
-HANDLERS = {"pi": Pi, "pi-router": Pi, "codex": lambda: codex, "opencode": lambda: opencode,
+HANDLERS = {"pi": Pi, "pi-router": Pi, "harness": Pi, "codex": lambda: codex, "opencode": lambda: opencode,
             "qwen": lambda: anthropic_style, "claude": lambda: anthropic_style}
 
 
