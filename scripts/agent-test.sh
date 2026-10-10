@@ -69,8 +69,15 @@ snapshot=""; [[ -f "$task_dir/SNAPSHOT" ]] && snapshot=1
 # （評分由本腳本做）；次數用完就結束 harness，成績照交卷內容算
 isolate=""; [[ -f "$task_dir/ISOLATE" ]] && isolate=1
 accept_max=""; [[ -f "$task_dir/ACCEPT" ]] && accept_max="$(cat "$task_dir/ACCEPT")" isolate=1
-# 題目檔：評分時一律用原檔蓋回去的那些（PROMPT.md 與標記檔以外的檔案）
-task_files=(); while IFS= read -r f; do task_files+=("$f"); done < <(
+# 作答檔：ISOLATE 檔裡一行一個的檔名（空檔案就是沒有）。題目附的、要 agent 修改的檔案（例如有 bug 的程式），
+# 複製進工作目錄時保持可寫，評分時也不用原檔蓋回
+answer_files=()
+if [[ -f "$task_dir/ISOLATE" ]]; then
+  while IFS= read -r f; do [[ -z "$f" ]] || answer_files+=("$f"); done < "$task_dir/ISOLATE"
+  for f in "${answer_files[@]}"; do [[ -f "$task_dir/$f" ]] || { echo "ISOLATE 列的作答檔不存在：evals/$task/$f" >&2; exit 2; }; done
+fi
+# 題目檔：評分時一律用原檔蓋回去的那些（PROMPT.md、標記檔與作答檔以外的檔案）
+task_files=(); while IFS= read -r f; do [[ " ${answer_files[*]} " == *" $f "* ]] || task_files+=("$f"); done < <(
   cd "$task_dir" && find . -name __pycache__ -prune -o -type f ! -name PROMPT.md ! -name ISOLATE ! -name ACCEPT ! -name SNAPSHOT ! -name TIMEOUT -printf '%P\n' | LC_ALL=C sort)
 # harness-lab 裡沒被 .gitignore 排除的未追蹤檔案（logs/、.cache/ 不算），開始和結束時比對，抓 agent 用絕對路徑寫到外面
 lab_untracked() { git -C "$LAB_DIR" ls-files --others --exclude-standard | LC_ALL=C sort; }
@@ -151,6 +158,7 @@ if [[ -n "$isolate" ]]; then
   echo "$work" > "$run/tmp-dirs.txt"
   if [[ -z "$accept_max" ]]; then
     for f in "${task_files[@]}"; do mkdir -p "$work/$(dirname "$f")" && cp -a "$task_dir/$f" "$work/$f" && chmod a-w "$work/$f"; done
+    for f in "${answer_files[@]}"; do mkdir -p "$work/$(dirname "$f")" && cp "$task_dir/$f" "$work/$f"; done
   fi
 fi
 # 把工作目錄的作答複製到 $1，再用原檔蓋回題目檔（評分一律用原檔）

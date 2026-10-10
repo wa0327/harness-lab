@@ -331,12 +331,12 @@ scripts/agent-test.sh --model luna review-readme codex   # 紀錄的標籤會加
 
 ### 評測題目（`evals/`）
 
-目前有 `hi`、`fix-inventory`、`implement-duration`（較難）、`gnc-stub`（最難）、`review-readme`、`cwd-probe` 六題。`gnc-stub` 是寫多旋翼的視覺運動規劃（`gnc.py`）：從相機的目標框和飛控回報的姿態、位置與速度算出速度命令，接近並接觸目標。運動學模擬器（`sim.py`）和測試都給 agent，24 個情境各是一個測試，`agent-test.sh` 結束時印的通過數就是過了幾個情境。限時 5 分鐘（`TIMEOUT` 檔 300 秒）。`hi` 是冒煙測試：只要回答 hi，幾秒就跑完，用來確認 harness、伺服器、模型整條路都通，例如 `scripts/agent-test.sh hi opencode`。`cwd-probe` 不考能力，是檢查隔離：請 agent 列出工作目錄、照抄環境資訊裡的路徑，用來確認 harness 有沒有把快照以外的東西帶進 context。新增題目時，在 `evals/<名稱>/` 放：
+目前有 `hi`、`fix-inventory`、`implement-duration`（較難）、`gnc-stub`（最難）、`big-file-fix`、`review-readme`、`cwd-probe` 七題。`big-file-fix` 是用來比 harness 而不是比模型的：`unitlib.py`（單位換算與數量解析庫，約 3,200 行、128KB）裡有 10 個彼此獨立的小 bug，每個看測試的失敗訊息就知道錯在哪；難處在檔案超過一次讀取的上限、整檔重寫在限時 15 分鐘內幾乎寫不完、測試失敗的輸出有 32KB，考驗分段讀取、局部修改和工具輸出的處理。25 個測試裡 20 個各對應一個 bug（每個 bug 2 個），另外 5 個在有 bug 的版本就會通過，用來抓整檔重寫或亂改造成的退化。答案不放在 repo 裡。`gnc-stub` 是寫多旋翼的視覺運動規劃（`gnc.py`）：從相機的目標框和飛控回報的姿態、位置與速度算出速度命令，接近並接觸目標。運動學模擬器（`sim.py`）和測試都給 agent，24 個情境各是一個測試，`agent-test.sh` 結束時印的通過數就是過了幾個情境。限時 5 分鐘（`TIMEOUT` 檔 300 秒）。`hi` 是冒煙測試：只要回答 hi，幾秒就跑完，用來確認 harness、伺服器、模型整條路都通，例如 `scripts/agent-test.sh hi opencode`。`cwd-probe` 不考能力，是檢查隔離：請 agent 列出工作目錄、照抄環境資訊裡的路徑，用來確認 harness 有沒有把快照以外的東西帶進 context。新增題目時，在 `evals/<名稱>/` 放：
 
 - `PROMPT.md`：送給 agent 的題目，必要。
 - `test_*.py`：有的話就用 `python3 -m unittest -q` 自動驗證，執行前後比對測試檔的 sha256，被 agent 改過就判 FAIL。沒有的話結果記為「人工」。
 - `SNAPSHOT`：放一個 commit，agent 改在 harness-lab 那個 commit 的快照裡工作（題目就是審查本專案時用）。
-- `ISOLATE`：空檔案即可。agent 改在 `/tmp/agent-work.*` 作答，題目檔（`PROMPT.md` 以外）複製進去並設成唯讀。跑完把工作目錄複製到 run 目錄的 `output/`，用原檔蓋回題目檔，再在那裡跑測試：agent 改了自己那份影響不到成績，但會被判 FAIL。紀錄裡出現 harness-lab 的 `logs/runs` 或 `evals` 路徑（agent 跑出去看評分檔或別人的答案）也判 FAIL。不在 run 目錄作答，是因為 agent 會從路徑推到 harness-lab。
+- `ISOLATE`：agent 改在 `/tmp/agent-work.*` 作答，題目檔（`PROMPT.md` 以外）複製進去並設成唯讀。內容是作答檔清單，一行一個檔名，沒有作答檔時放空檔案即可：作答檔是題目附上、要 agent 修改的檔案（例如 `big-file-fix` 有 bug 的模組），複製進去時保持可寫，評分時也不蓋回原檔。跑完把工作目錄複製到 run 目錄的 `output/`，用原檔蓋回題目檔，再在那裡跑測試：agent 改了自己那份影響不到成績，但會被判 FAIL。紀錄裡出現 harness-lab 的 `logs/runs` 或 `evals` 路徑（agent 跑出去看評分檔或別人的答案）也判 FAIL。不在 run 目錄作答，是因為 agent 會從路徑推到 harness-lab。
 - `TIMEOUT`：放限時秒數（例如 `3600`），取代預設的 1800 秒；命令列有給 `TIMEOUT` 時以命令列為準。有這個檔時，題目最後會自動加一句「本題限時 N 分鐘…」告訴 agent（不是整分鐘時寫成「N 分 M 秒」）。
 - `ACCEPT`：放驗收次數上限，用法同 `ISOLATE`，但題目檔不放進工作目錄，agent 只能用 `./accept` 送出驗收：它只在佇列目錄 `/tmp/agent-accept.*` 放請求單，由 `agent-test.sh` 在 agent 的程序之外評分、寫回結果，次數也由這邊計算。用完就結束 harness，成績是最後一次驗收的那份。每次驗收的作答與輸出存在 run 目錄的 `accept/`。
 
