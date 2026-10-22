@@ -37,3 +37,4 @@ Write the `[[component]]` blocks for `.teamind/deploy.toml` (the Project Lead wr
 
 ## Progress
 - 2026-10-22 17:27 Project Lead: split from HL-1 after its script survey. Owner: Inference Engineer; brief at `.teamind/briefs/harness-lab-inference-engineer.md`. **Resume:** the Inference Engineer reads the brief and starts.
+- 2026-10-22 17:29 Project Lead: dispatched (`team.sh send`, queued until the coordinator wakes it). **Resume:** its report; then merge the components into HL-1's `deploy.toml`.
