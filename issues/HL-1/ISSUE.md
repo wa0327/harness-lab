@@ -2,7 +2,7 @@
 id: HL-1
 title: "Deploy harness-lab to zephyrus and noble (deploy.toml, llama.cpp and models as components, task kinds, stop by pid)"
 title_zh: "把 harness-lab 部署到 zephyrus、noble（deploy.toml、llama.cpp 與模型當外部元件、工作種類、改用 pid 停止）"
-status: assigned
+status: fixing
 state: open
 type: feature
 area: infra
@@ -10,7 +10,7 @@ severity: minor
 priority: 
 author: Project Lead
 owner: Project Lead
-handed: assigned / Project Lead
+handed: fixing / Project Lead
 holder: Project Lead
 blocked_by: 
 parent: 
@@ -42,3 +42,4 @@ Scope:
 
 ## Progress
 - 2026-10-22 17:21 Project Lead: filed after 啟用 (the coordinator, 16:09), per TM-430 §3 and §8. Owner: Project Lead (the roster gives it the deployments). **Resume:** read the scripts for what each runs and sources, draft `.teamind/deploy.toml`, run the closure dry run.
+- 2026-10-22 17:22 Project Lead: backlog pass (TM-432): the issue is mine and moving, so status `fixing`. A read-only survey of the scripts (what each runs, sources, reads, writes and downloads; every `pkill`; a draft deploy.toml and tasks.toml) is running in a background subagent of this session. Nothing is half-edited. **Resume:** take the survey's result, write `.teamind/deploy.toml` and `config/tasks.toml`, run Teamind's closure dry run.
