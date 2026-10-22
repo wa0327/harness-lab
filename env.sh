@@ -11,6 +11,11 @@ export LOG_DIR="${LOG_DIR:-$LAB_DIR/logs}"   # 自動產生的紀錄，不進版
 if [[ -f "$LAB_DIR/data/secrets/env.sh" ]]; then
   source "$LAB_DIR/data/secrets/env.sh"
 fi
+# 主機上的部署沒有 data/secrets/，同樣的兩個祕密由使用者手動放在 secrets.local.sh（部署的 local/ 會保留它，
+# 不進版控、不會被部署送出、成員不讀；暫行做法，等 Teamind TM-450 定案，HL-1）
+if [[ -f "$LAB_DIR/secrets.local.sh" ]]; then
+  source "$LAB_DIR/secrets.local.sh"
+fi
 
 # 這台機器自己的設定（不進版控，範本見 env.local.sh.example）。
 # 在下面的預設值之前讀入，所以會蓋過預設值；命令列上的環境變數仍然優先
