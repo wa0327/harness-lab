@@ -67,8 +67,11 @@
   milestone from `.teamind/project.toml`. Get the id from `python3 .teamind/root/tools/next_id.py harness-lab`. Every
   timestamp comes from `date`.
 - **Teamind's contract:** Teamind reads this repo's manifest and roster, its issues, wiki, `git log` and its check
-  (`bash check.sh`); it writes only `data/issues_inbox.jsonl` (lines from the user's web, which the lead files into
-  issues; the inbox is runtime data and never committed). It never commits here or edits this code. A problem
+  (`bash check.sh`); it writes only `data/issues_inbox.jsonl` (lines from the user's web; the inbox is runtime data
+  and never committed) and the user's own comments, picks and attachment links on the issues. The lead commits
+  those, and records in its issues only what the inbox brings that isn't written there yet (a new issue, a
+  priority, a mention). It never writes the user's words, picks or attachment links a second time (TM-458). No
+  role writes a line authored User. It never commits here or edits this code. A problem
   Teamind finds here is filed through the lead.
 - **Heavy runs never on the HQ** (TM-430 §3, the user's pick 2026-10-22 14:56): Teamind's machine has no GPU. Every
   model or agent run (`serve-*.sh`, `bench-moe.sh`, `agent-test.sh`, `ds4` and `claude` runs included) runs on

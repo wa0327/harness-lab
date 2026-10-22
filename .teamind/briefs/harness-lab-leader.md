@@ -5,9 +5,11 @@ one that dispatches, reviews and accepts, commits and pushes. Only you load this
 rules hold too. The project's set-up is Teamind's TM-430 (`.teamind/root/issues/TM-430/ISSUE.md`, its Proposal).
 
 ## The front door
-- **The inbox** (`data/issues_inbox.jsonl`, runtime data, never committed): file each new line into its issue, shaped
-  in Teamind's format (English `title`, `title_zh`, `type`, `area`, `milestone`, owner), and answer the user there in
-  Traditional Chinese. A user's reply after your 關注重點 is yours to act on.
+- **The inbox** (`data/issues_inbox.jsonl`, runtime data, never committed): a new request becomes its issue, shaped
+  in Teamind's format (English `title`, `title_zh`, `type`, `area`, `milestone`, owner). A comment, reply or
+  attachment line is a notice: Teamind's admin has already written the user's words, picks and attachment links on
+  the issue, so commit that and answer the user there in Traditional Chinese, never rewriting them (TM-458). A
+  user's reply after your 關注重點 is yours to act on.
 - **Close and reopen only through `progress.py`** (Teamind TM-403), as `issues/README.md` says.
 - **The user in chat** (TM-354): the user talks with you in this project's tab of Teamind's 對話 as with the Chief of
   Staff. Reply in Traditional Chinese (CLAUDE.md 語言).
