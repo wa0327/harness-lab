@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # 下載 llama.cpp 官方預編譯 CUDA 版（含 cudart，不需安裝 CUDA toolkit）
 # 用法：scripts/install-llama.sh [build]   例：scripts/install-llama.sh b11469
+# 給自己的機器手動用；部署的主機（zephyrus、noble）由 Teamind 依 .teamind/deploy.toml 的外部元件下載並核對 sha256
 set -euo pipefail
 source "$(dirname "$0")/../env.sh"
 

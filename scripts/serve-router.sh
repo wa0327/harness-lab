@@ -2,6 +2,7 @@
 # Router 模式：Pi 官方建議的接法（Pi 裡用 /login llama.cpp、/llama、/model）
 # 不帶 -m；router 會掃描 $MODELS_DIR，任何 harness 送出請求時依 model 欄位自動載入
 # 已驗證：MoE 卸載等參數會傳給 router 啟動的模型程序；模型名稱是檔名（不含 .gguf）
+# 部署的主機上每個模型連在 $MODELS_DIR 的一個子資料夾（以檔名命名），router 掃一層子資料夾、以資料夾名稱命名，名稱不變
 # --models-max 1：8GB VRAM 同時只放得下一個主模型；必須寫在命令列，寫在 preset INI 裡無效
 #   代價：請求別的模型（例如誤填 FIM 模型名稱）會把主模型卸載。FIM 請另用 serve-fim.sh
 # context 不跟 MODEL 的 CTX：router 用同一組參數載入任何模型，GLM 在 128K 會 OOM，所以固定 64K（可用 ROUTER_CTX 覆寫）

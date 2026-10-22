@@ -25,7 +25,7 @@ out="$LOG_DIR/bench/bench-$(hostname)-$(date +%Y%m%d-%H%M).md"
 
 for n in "${values[@]}"; do
   echo "== --n-cpu-moe $n" | tee -a "$out"
-  if ! llama-bench -m "$MODELS_DIR/$MAIN_FILE" \
+  if ! llama-bench -m "$(lab_model_path "$MAIN_FILE")" \
       -ngl 999 --n-cpu-moe "$n" -fa on -ctk "$KV_TYPE" -ctv "$KV_TYPE" \
       -b "$BATCH" -ub "$UBATCH" -lm "$LOAD_MODE" -t "$THREADS" \
       -p "$PP" -n "$TG" -r 2 -o md 2>>"$out.log" | tee -a "$out"; then

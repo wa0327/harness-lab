@@ -30,6 +30,9 @@ export LLAMA_BIN="${LLAMA_BIN:-$LAB_DIR/vendor/llama.cpp/current}"
 
 # 模型
 export MODELS_DIR="${MODELS_DIR:-$LAB_DIR/models}"
+# 模型檔的位置：部署的主機上每個模型是一個 Teamind 外部元件，連在 $MODELS_DIR/<檔名去掉 .gguf>/ 底下
+# （router 模式掃一層子資料夾，以資料夾名稱為模型名稱，所以和平放時同名）；get-models.sh 手動下載的直接放在 $MODELS_DIR/
+lab_model_path() { local d="$MODELS_DIR/${1%.gguf}/$1"; if [[ -e "$d" ]]; then echo "$d"; else echo "$MODELS_DIR/$1"; fi; }
 # 主模型用 MODEL 切換（qwen｜glm｜ds4），各值仍可個別覆寫，例：MODEL=glm scripts/serve-main.sh
 # 互動 shell 可直接帶參數：. env.sh glm（腳本 source 時 $1 是腳本自己的參數，所以只認直接 source 的）
 # N_CPU_MOE 和模型的層數有關，所以跟著模型走；各機器的值寫在 env.local.sh 的 N_CPU_MOE_<模型>

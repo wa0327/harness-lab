@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # 下載主模型與 FIM 補全模型到 $MODELS_DIR
 # 用法：scripts/get-models.sh [main|fim|all]（預設 all）
+# 給自己的機器手動用；部署的主機由 Teamind 依 .teamind/deploy.toml 的外部元件下載（固定 commit、核對 sha256），
+# 每個模型連在 $MODELS_DIR/<檔名去掉 .gguf>/，見 env.sh 的 lab_model_path
 set -euo pipefail
 source "$(dirname "$0")/../env.sh"
 

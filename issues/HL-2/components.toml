@@ -1,0 +1,48 @@
+# HL-2: the [[component]] blocks for .teamind/deploy.toml, for the Project Lead to merge (HL-1).
+# Every sha256 was looked up by metadata on 2026-10-22, nothing downloaded on the HQ:
+#   llama.cpp: the GitHub API's asset `digest` (GET /repos/ggml-org/llama.cpp/releases/tags/b11469);
+#   weights: the Hugging Face LFS oid (GET /api/models/<repo>/tree/<commit>), at the commit `main` pointed to then.
+# strip = 1: release.yml at b11469 packs each archive with one top folder (llama-b11469/, cudart-llama-b11469-…/),
+# so llama-server and the three CUDA libraries land side by side at the component's top ($ORIGIN rpath).
+# CUDA 13.4 for both hosts (driver 580.178.04, CUDA 13.0, on both): see issues/HL-2/ISSUE.md.
+
+[[component]]
+name = "llama.cpp"
+version = "b11469"
+prebuilt = { "linux-x86_64" = [
+  { url = "https://github.com/ggml-org/llama.cpp/releases/download/b11469/llama-b11469-bin-ubuntu-cuda-13.4-x64.tar.gz", sha256 = "fdce1e30678658f60ba36ae256d53ecd6da439e874e1a843aa0de6a9905a4525", strip = 1 },
+  { url = "https://github.com/ggml-org/llama.cpp/releases/download/b11469/cudart-llama-b11469-bin-ubuntu-cuda-13.4-x64.tar.gz", sha256 = "8f4dc07e5cec89b816ab92e7744ba5c89391b917fd695ccf206f804dc55fbb53", strip = 1 },
+] }
+check = ["./llama-server", "--version"]
+link = "vendor/llama.cpp/current"   # env.sh's LLAMA_BIN default
+
+# One component per model: each repo has its own commit, and a new quant of one re-downloads only that one.
+# The link folder is the file's name without .gguf, which router mode (--models-dir scans one level of
+# subfolders, naming a model by its folder) keeps as the model's name; env.sh's lab_model_path finds the file.
+
+[[component]]
+name = "Qwen3.6-35B-A3B-GGUF"   # unsloth/Qwen3.6-35B-A3B-GGUF, 22,360,456,160 bytes
+version = "a483e9e6cbd595906af30beda3187c2663a1118c"
+prebuilt = { any = [
+  { url = "https://huggingface.co/unsloth/Qwen3.6-35B-A3B-GGUF/resolve/a483e9e6cbd595906af30beda3187c2663a1118c/Qwen3.6-35B-A3B-UD-Q4_K_XL.gguf", sha256 = "707a55a8a4397ecde44de0c499d3e68c1ad1d240d1da65826b4949d1043f4450" },
+] }
+check = ["test", "-s", "Qwen3.6-35B-A3B-UD-Q4_K_XL.gguf"]
+link = "models/Qwen3.6-35B-A3B-UD-Q4_K_XL"
+
+[[component]]
+name = "GLM-4.7-Flash-GGUF"   # unsloth/GLM-4.7-Flash-GGUF, 17,520,169,312 bytes
+version = "0d32489ecb9db6d2a4fc93bd27ef01519f95474d"
+prebuilt = { any = [
+  { url = "https://huggingface.co/unsloth/GLM-4.7-Flash-GGUF/resolve/0d32489ecb9db6d2a4fc93bd27ef01519f95474d/GLM-4.7-Flash-UD-Q4_K_XL.gguf", sha256 = "b0d4fbc1211f891b4cfbf2a497160bfe06a49412420068904d426b7a13f4ba7f" },
+] }
+check = ["test", "-s", "GLM-4.7-Flash-UD-Q4_K_XL.gguf"]
+link = "models/GLM-4.7-Flash-UD-Q4_K_XL"
+
+[[component]]
+name = "Qwen2.5-Coder-1.5B-Q8_0-GGUF"   # ggml-org/Qwen2.5-Coder-1.5B-Q8_0-GGUF, 1,646,573,056 bytes (FIM)
+version = "8be1b8a895a84beea772817caaa71eba6b6e0d07"
+prebuilt = { any = [
+  { url = "https://huggingface.co/ggml-org/Qwen2.5-Coder-1.5B-Q8_0-GGUF/resolve/8be1b8a895a84beea772817caaa71eba6b6e0d07/qwen2.5-coder-1.5b-q8_0.gguf", sha256 = "29871c94d15727a6e243f79a37113d4ae625a6215b5e800bf41a23af2da32832" },
+] }
+check = ["test", "-s", "qwen2.5-coder-1.5b-q8_0.gguf"]
+link = "models/qwen2.5-coder-1.5b-q8_0"
