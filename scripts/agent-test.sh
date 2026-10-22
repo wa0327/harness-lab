@@ -62,6 +62,10 @@ fi
 # 結束時比對，被改過就判 FAIL。不要求原檔已提交，正在寫的新題目也能直接跑。
 # SNAPSHOT 題目的內容來自指定的 commit，不從 evals/ 複製，不比對（跑出去新增檔案的情況由結束時的 lab_untracked 抓）
 snapshot=""; [[ -f "$task_dir/SNAPSHOT" ]] && snapshot=1
+# harness-lab 本身是不是 git repo：主機上的部署沒有 .git（HL-1），也可能剛好落在別的 git repo 底下，所以比對根目錄
+lab_is_repo=""; [[ "$(git -C "$LAB_DIR" rev-parse --show-toplevel 2>/dev/null)" == "$(cd "$LAB_DIR" && pwd -P)" ]] && lab_is_repo=1
+[[ -z "$snapshot" || -n "$lab_is_repo" ]] || {
+  echo "SNAPSHOT 題目要從 harness-lab 的 git 歷史取快照，這裡沒有 .git（主機上的部署），只能在 clone 裡跑" >&2; exit 2; }
 # ISOLATE 題目：agent 在 /tmp 的工作目錄作答，題目檔（模擬器、測試…）複製進去並設成唯讀。跑完把工作目錄複製到
 # run 目錄的 output/，再用原檔蓋回題目檔、在那裡跑測試：agent 改了自己那份也影響不到成績，改了照樣判 FAIL。
 # 不在 run 目錄作答，是因為 agent 會從路徑推到 harness-lab，看到 logs/runs/ 底下別的 harness 交的答案
@@ -80,7 +84,15 @@ fi
 task_files=(); while IFS= read -r f; do [[ " ${answer_files[*]} " == *" $f "* ]] || task_files+=("$f"); done < <(
   cd "$task_dir" && find . -name __pycache__ -prune -o -type f ! -name PROMPT.md ! -name ISOLATE ! -name ACCEPT ! -name SNAPSHOT ! -name TIMEOUT -printf '%P\n' | LC_ALL=C sort)
 # harness-lab 裡沒被 .gitignore 排除的未追蹤檔案（logs/、.cache/ 不算），開始和結束時比對，抓 agent 用絕對路徑寫到外面
-lab_untracked() { git -C "$LAB_DIR" ls-files --others --exclude-standard | LC_ALL=C sort; }
+# 部署上沒有 git：改列所有一般檔案。logs/、各 harness 的家目錄、快取在部署上都是連到 local/ 的連結，find 不會進去；
+# 開始和結束用同一種列法，比對的只是多出來的檔案
+lab_untracked() {
+  if [[ -n "$lab_is_repo" ]]; then
+    git -C "$LAB_DIR" ls-files --others --exclude-standard
+  else
+    (cd "$LAB_DIR" && find . \( -name __pycache__ -o -path ./logs \) -prune -o -type f -printf '%P\n')
+  fi | LC_ALL=C sort
+}
 tmp_dirs=()   # 本次用到的 /tmp 目錄，結束時（包括中途出錯、被中斷）一律刪掉
 # 不管怎麼結束（出錯、被 kill、終端機關掉）都先收掉 harness：實測主程序意外結束時，背景的 harness 會繼續跑、
 # 一直佔著模型伺服器推理
