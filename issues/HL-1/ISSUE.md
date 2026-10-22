@@ -11,7 +11,7 @@ priority:
 author: Project Lead
 owner: Project Lead
 handed: fixing / Project Lead
-holder: Project Lead
+holder: User
 blocked_by: 
 parent: 
 related: TM-430, TM-319, TM-404, TM-245
@@ -62,6 +62,7 @@ Scope:
 - 2026-10-22 18:12 Project Lead: the user (18:11) doesn't know what earlier sessions did on the hosts, and authorizes reading harness-lab's Claude transcripts (`~/.claude/projects`, 37 transcripts from 10-08 to 10-11 plus today's) to find out. A read-only subagent of this session is auditing them: which machine each session ran on, what was installed or left on resolute/zephyrus and noble (clone, models, llama.cpp, harness homes, running servers), writes outside the repo, and incidents. Secret values are never copied. **Resume:** its report → a reply to the user here, and any change to the deployment plan (for example reusing the models already on zephyrus); the user's 部署 waits on that reply.
 - 2026-10-22 18:19 Project Lead: the transcript audit is in. Every session from 10-07 to 10-11 ran on resolute itself; noble got two read-only ssh looks, and its `~/repos/harness-lab` (f95ac49, llama.cpp, no models) is the user's own hand setup; no harness-lab session touched zephyrus's 24.04 install. resolute's llama.cpp and ~41.5 GB of models went with the partition merged into zephyrus on 10-20. `host_deploy.py --dry-run` (serve entries, read only) on both hosts: deploy root `~/deploy/harness-lab`, every component `install (download)` (llama.cpp 592.8 MB, the three models 41.5 GB), nothing deleted. Past incidents (an agent writing outside its folder, a live Codex work folder deleted by a wildcard `rm`, every llama-server killed) are covered by the /tmp work folders, the EXIT trap and HL-2's pid stop; the harnesses still run unsandboxed (the Sandbox Engineer's, not filed yet). Replied to the user (Comments). **Resume:** the user's `serve` tick and 部署 on zephyrus; then a `serve` job; agent-test after TM-450's npm change; noble after zephyrus, and ask the user before removing noble's old clone.
 - 2026-10-22 18:28 Project Lead: the user (18:28) asked Teamind's Chief of Staff, through its System Architect, how large weight files should be shared across projects so they're neither downloaded nor stored twice. The @ reaches them through Teamind. I sent the Chief of Staff the facts: our four components with sizes and pins, business-sim's same-named, same-size Qwen file and llama.cpp b11469 on zephyrus (sha unchecked), and the dry run's 42 GB per host. The first 部署 can wait for that answer; nothing is downloaded yet. **Resume:** Teamind's answer on shared weights → adjust the components if the contract changes → the user's `serve` tick and 部署 on zephyrus.
+- 2026-10-22 18:29 Project Lead: the Chief of Staff filed the shared-weights question as TM-461 (Teamind's System Architect); waiting or downloading now is the user's call, asked here (`hl1wait`; recommended: wait). **Resume:** the user's `hl1wait` pick: A → wait for TM-461, then adjust the components; B → the user's `serve` tick and 部署 on zephyrus now.
 
 ## Comments
 - **2026-10-22 17:36 專案經理:** **關注重點**：harness-lab 的部署設定好了，要你在 Teamind 的「主機」頁做兩件事：
@@ -80,3 +81,17 @@ Scope:
   所以可以照 17:44 那則做：只把 zephyrus 勾給「本地模型伺服器」，然後按部署。noble 上的舊 clone 等 noble 部署跑通後再決定要不要刪，刪之前會先問你。
   （另一個選擇：zephyrus 上 business-sim 已經有同一個 Qwen 檔，22 GB，可以沿用省一次下載，但那是跨專案的事要幕僚長同意；我建議直接下載，兩個專案各管各的比較單純。）
 - **2026-10-22 18:28 User:** @幕僚長(Teamind) 請 @系統架構師(Teamind) 評估一下，關於這種權重大檔，要如何規劃共用，避免每個專案重複下載/佔用一倍空間。
+- **2026-10-22 18:29 專案經理:** **關注重點**：幕僚長已把權重檔共用開成 Teamind 的 TM-461，交給系統架構師評估。要等它定案再部署，還是現在就部署 zephyrus？
+
+```choice
+id = "hl1wait"
+title = "harness-lab 部署 zephyrus 的時機"
+[[question]]
+id = "when"
+label = "權重檔共用（TM-461）還在評估，zephyrus 的部署要："
+max = 1
+options = [
+  { id = "wait", label = "A 等 TM-461 定案再部署：之後不用搬檔，但 harness-lab 要等到那時才能在 zephyrus 跑模型", recommended = true },
+  { id = "now", label = "B 現在就部署：zephyrus 會多下載、多佔約 24 GB（Qwen 22 GB 和 llama.cpp 跟 business-sim 重複），TM-461 定案後再改成共用" },
+]
+```
