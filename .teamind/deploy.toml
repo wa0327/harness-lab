@@ -1,0 +1,105 @@
+# harness-lab 的部署宣告（Teamind TM-319、TM-404；.teamind/root/wiki/design/projects.md「A deployment, not a clone」；HL-1）。
+# 總部沒有 GPU：模型與 agent 測試只在 zephyrus、noble 上的部署跑（TM-430 §3），由使用者在「主機」頁勾選。
+#
+# 主機上除了檔案之外的事（file:line 在本 repo）：
+# - 每個入口都在 app/ 執行；env.sh 以自己的位置定 LAB_DIR（env.sh:5），所以 app/ 就是 LAB_DIR。
+# - agent-test.sh 在沒有 .git 的部署上改用 find 抓跑到外面的檔案（lab_untracked）；SNAPSHOT 題目只能在 clone 跑。
+# - 伺服器各自寫 logs/serve-<名稱>.pid，scripts/stop-server.sh <名稱> 只停那個 pid（HL-2），不 pkill：
+#   同一台的 business-sim 也可能有 llama-server。
+# - 祕密：使用者手放在部署根目錄的 secrets.local.sh（local 保留它）；TM-450 上線後改放 <deploy root>/data/secrets/env.sh。
+# - npm 套件由 Teamind 的 node 環境 npm ci 裝（TM-450：HOME、XDG 在環境資料夾內，opencode 的 postinstall 不會寫到家目錄）；
+#   各 harness 的設定由 place-configs 從 configs/ 放進 .home/（只在不存在時）。
+
+schema = 1
+
+# 跨部署保留：各 harness 的家目錄（設定、登入、對話紀錄）、工具快取、跑分與測試紀錄、這台的調參數檔、暫行的祕密檔
+local = [".home", ".cache", "logs", "env.local.sh", "secrets.local.sh"]
+
+[[entry]]
+name = "serve-main"
+start = "scripts/serve-main.sh"
+
+[[entry]]
+name = "serve-fim"
+start = "scripts/serve-fim.sh"
+
+[[entry]]
+name = "serve-router"
+start = "scripts/serve-router.sh"
+
+[[entry]]
+name = "stop-server"
+start = "scripts/stop-server.sh"
+
+[[entry]]
+name = "bench"
+start = "scripts/bench-moe.sh"   # llama-bench 由 env.sh 放上 PATH 的 $LLAMA_BIN 來（llama.cpp 元件）
+
+[[entry]]
+# agent-test.sh 經 $LAB_DIR 啟動這些（agent-test.sh 的 harness、watch-agent、collect-subagents、compare-runs），
+# 依賴分析看不到，所以列在 extra；題目整個 evals/ 都要
+name = "agent-test"
+start = "scripts/agent-test.sh"
+extra = [
+  "evals/**", "bin/opencode", "harness/__main__.py",
+  "scripts/watch-agent.py", "scripts/collect-subagents.py", "scripts/compare-runs.py", "scripts/logproxy.py",
+]
+env = ["node"]
+
+[[entry]]
+name = "compare-runs"
+start = "scripts/compare-runs.py"
+extra = ["evals/**"]   # 讀 evals/<題目>
+
+[[entry]]
+name = "place-configs"
+start = "scripts/place-configs.sh"
+extra = ["configs/**"]
+
+[env.node]
+node = "24"   # 沒有 .node-version；Pi 要 22.19 以上（setup-tools.sh:13）
+
+# 外部元件：HL-2（推論引擎工程師），每個 sha256 都由中繼資料查得，總部沒有下載（issues/HL-2/ISSUE.md 的 Findings）。
+# 兩台主機的驅動都是 580.178.04（CUDA 13.0），CUDA 13.4 的建置靠次版本相容執行；12.8 只留給手動安裝。
+[[component]]
+name = "llama.cpp"
+version = "b11469"
+prebuilt = { "linux-x86_64" = [
+  { url = "https://github.com/ggml-org/llama.cpp/releases/download/b11469/llama-b11469-bin-ubuntu-cuda-13.4-x64.tar.gz", sha256 = "fdce1e30678658f60ba36ae256d53ecd6da439e874e1a843aa0de6a9905a4525", strip = 1 },
+  { url = "https://github.com/ggml-org/llama.cpp/releases/download/b11469/cudart-llama-b11469-bin-ubuntu-cuda-13.4-x64.tar.gz", sha256 = "8f4dc07e5cec89b816ab92e7744ba5c89391b917fd695ccf206f804dc55fbb53", strip = 1 },
+] }
+check = ["./llama-server", "--version"]
+link = "vendor/llama.cpp/current"   # env.sh 的 LLAMA_BIN 預設值
+entries = ["serve-main", "serve-fim", "serve-router", "bench"]
+
+# 一個模型一個元件：各 repo 有自己的 commit，換一個量化版只重抓那一個。連結資料夾名是檔名去掉 .gguf，
+# router 模式（--models-dir 掃一層子資料夾、以資料夾命名模型）的模型名不變；env.sh 的 lab_model_path 找得到檔案
+[[component]]
+name = "Qwen3.6-35B-A3B-GGUF"   # unsloth/Qwen3.6-35B-A3B-GGUF, 22,360,456,160 bytes
+version = "a483e9e6cbd595906af30beda3187c2663a1118c"
+prebuilt = { any = [
+  { url = "https://huggingface.co/unsloth/Qwen3.6-35B-A3B-GGUF/resolve/a483e9e6cbd595906af30beda3187c2663a1118c/Qwen3.6-35B-A3B-UD-Q4_K_XL.gguf", sha256 = "707a55a8a4397ecde44de0c499d3e68c1ad1d240d1da65826b4949d1043f4450" },
+] }
+check = ["test", "-s", "Qwen3.6-35B-A3B-UD-Q4_K_XL.gguf"]
+link = "models/Qwen3.6-35B-A3B-UD-Q4_K_XL"
+entries = ["serve-main", "serve-router", "bench"]
+
+[[component]]
+name = "GLM-4.7-Flash-GGUF"   # unsloth/GLM-4.7-Flash-GGUF, 17,520,169,312 bytes
+version = "0d32489ecb9db6d2a4fc93bd27ef01519f95474d"
+prebuilt = { any = [
+  { url = "https://huggingface.co/unsloth/GLM-4.7-Flash-GGUF/resolve/0d32489ecb9db6d2a4fc93bd27ef01519f95474d/GLM-4.7-Flash-UD-Q4_K_XL.gguf", sha256 = "b0d4fbc1211f891b4cfbf2a497160bfe06a49412420068904d426b7a13f4ba7f" },
+] }
+check = ["test", "-s", "GLM-4.7-Flash-UD-Q4_K_XL.gguf"]
+link = "models/GLM-4.7-Flash-UD-Q4_K_XL"
+entries = ["serve-main", "serve-router", "bench"]
+
+[[component]]
+name = "Qwen2.5-Coder-1.5B-Q8_0-GGUF"   # ggml-org/Qwen2.5-Coder-1.5B-Q8_0-GGUF, 1,646,573,056 bytes（Tab 補全）
+version = "8be1b8a895a84beea772817caaa71eba6b6e0d07"
+prebuilt = { any = [
+  { url = "https://huggingface.co/ggml-org/Qwen2.5-Coder-1.5B-Q8_0-GGUF/resolve/8be1b8a895a84beea772817caaa71eba6b6e0d07/qwen2.5-coder-1.5b-q8_0.gguf", sha256 = "29871c94d15727a6e243f79a37113d4ae625a6215b5e800bf41a23af2da32832" },
+] }
+check = ["test", "-s", "qwen2.5-coder-1.5b-q8_0.gguf"]
+link = "models/qwen2.5-coder-1.5b-q8_0"
+entries = ["serve-fim", "serve-router"]

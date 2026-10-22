@@ -19,7 +19,9 @@ user_prefix = "U-"              # 載入器要求；不使用：議題一律 HL-
 code = "HL"                     # 議題代碼：HL-<n>（使用者 2026-10-22 14:56，TM-430）
 
 [pool]
-use = false                     # 總部沒有 GPU，模型與 agent 測試只在主機跑；啟用後第一個議題做 zephyrus、noble 的部署（TM-430 §3）
+use = true                      # 總部沒有 GPU，模型與 agent 測試只在主機跑，由使用者勾選（TM-430 §3，HL-1）
+tasks = "config/tasks.toml"     # 工作種類與可接的主機
+inventory = ".teamind/root/config/hosts.toml"   # Teamind 的主機清單
 
 [verify]
 default = "Project Lead"        # 修好的議題由專案經理驗收，或交回回報者

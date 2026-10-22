@@ -1,0 +1,9 @@
+# harness-lab 給 Teamind 主機工作表的平台設定（HL-1）：Teamind 的派工與主機探測經 tools/platform_config.py 讀它。
+
+# 只在總部讀，`<workdir>/le/ledger/*.json`，替專案自己的派工程式計時（Teamind TM-227）。不是主機上的資料夾：
+# 主機上的工作跑在部署裡。所以它不能是 host_root，也不能在它底下。harness-lab 沒有自己的派工程式，目前沒有東西讀寫它。
+workdir = "~/harness-lab-work"
+
+# 這個專案在管理頁上的名稱
+site_title = "harness-lab"
+site_subtitle = "本地模型 agent 實驗室"

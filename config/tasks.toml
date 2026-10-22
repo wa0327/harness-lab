@@ -1,0 +1,58 @@
+# harness-lab 在主機上的工作種類（Teamind 的主機工作表；HL-1）。「主機」頁只改各種類的 `hosts = [...]` 那一行：
+# 由使用者勾選（TM-430 §8 選項 A）。總部沒有 GPU，模型與 agent 測試都只在主機跑（TM-430 §3）。
+#
+# 鍵：deploy＝這個種類在主機上要用的 .teamind/deploy.toml 入口；exclusive＝要獨佔主機（tools/hostlock.py，8GB 顯卡
+# 一次只放得下一個主模型）；min_free_gpu_mb＝開始前顯卡至少要空出多少；output_glob、fetch＝跑完帶回總部的紀錄。
+# 同一台可能有 business-sim 的 llama-server：工作開始前先看（nvidia-smi、ss），只停自己起的（stop-server.sh 依 pid）。
+# ds4 與 claude 考生不用每批先問（TM-430 §8），但只在這裡跑，每批的執行與 claude 費用記在議題上。
+
+[serve]   # scripts/serve-main.sh／serve-fim.sh／serve-router.sh，停止用 scripts/stop-server.sh <名稱>
+label_zh = "本地模型伺服器"
+hosts = []
+requires = []
+os = ["linux"]
+archs = ["x86_64"]
+deploy = ["serve-main", "serve-fim", "serve-router", "stop-server"]
+exclusive = true
+min_free_gpu_mb = 6000
+
+[bench]   # scripts/bench-moe.sh：n-cpu-moe 等參數的跑分，寫 logs/bench/bench-<主機>-<日期>.md
+label_zh = "模型參數跑分"
+hosts = []
+requires = []
+os = ["linux"]
+archs = ["x86_64"]
+deploy = ["bench"]
+exclusive = true
+min_free_gpu_mb = 6000
+output_glob = "logs/bench"
+
+[bench.fetch]
+include = ["*.md", "*.md.log"]
+
+[agent-test]   # 起伺服器、等 /health、scripts/agent-test.sh <題目> <harness>、依 pid 停伺服器；紀錄在 logs/runs/
+label_zh = "Harness 解題測試"
+hosts = []
+requires = ["node"]
+os = ["linux"]
+archs = ["x86_64"]
+deploy = ["agent-test", "serve-main", "serve-router", "stop-server", "place-configs", "compare-runs"]
+exclusive = true
+min_free_gpu_mb = 6000
+output_glob = "logs/runs/*/*/*"
+
+[agent-test.fetch]
+include = ["**"]
+cap_mb = 50
+
+[compare-runs]   # scripts/compare-runs.py：比較各 harness 的結果，不用 GPU
+label_zh = "比較 harness 結果"
+hosts = []
+requires = []
+deploy = ["compare-runs"]
+
+[setup]   # scripts/place-configs.sh：把 configs/ 的範本放進各 harness 的家目錄（只在不存在時）
+label_zh = "放好 harness 設定"
+hosts = []
+requires = []
+deploy = ["place-configs"]
