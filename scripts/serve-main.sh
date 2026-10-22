@@ -5,6 +5,7 @@ set -euo pipefail
 source "$(dirname "$0")/../env.sh"
 [[ -n "$MAIN_FILE" ]] || { echo "MODEL=$MODEL 是遠端模型（$MAIN_URL），不在本機啟動，直接用 harness 連過去" >&2; exit 1; }
 unset LLAMA_API_KEY   # 這是給 Pi 的；llama-server 也會讀同名變數當自己的 key，伺服器的 key 一律由 --api-key 傳入
+lab_server_start main   # pid 記在 logs/serve-main.pid，scripts/stop-server.sh main 停止
 
 exec "$LLAMA_BIN/llama-server" \
   -m "$(lab_model_path "$MAIN_FILE")" --alias "$MAIN_ALIAS" \

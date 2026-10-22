@@ -5,6 +5,7 @@
 set -euo pipefail
 source "$(dirname "$0")/../env.sh"
 unset LLAMA_API_KEY   # 這是給 Pi 的；llama-server 也會讀同名變數當自己的 key，伺服器的 key 一律由 --api-key 傳入
+lab_server_start fim   # pid 記在 logs/serve-fim.pid，scripts/stop-server.sh fim 停止
 
 exec "$LLAMA_BIN/llama-server" \
   -m "$(lab_model_path "$FIM_FILE")" \

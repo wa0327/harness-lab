@@ -89,6 +89,22 @@ export API_KEY="${API_KEY:-$LAB_DEFAULT_API_KEY}"
 if [[ "$API_KEY" == "$LAB_DEFAULT_API_KEY" && "$HOST" != 127.0.0.1 && "$HOST" != localhost && "$HOST" != ::1 ]]; then
   echo "env.sh 警告：HOST=$HOST 對外開放，但 API_KEY 還是公開的預設值 $LAB_DEFAULT_API_KEY，任何人都能使用這台的模型" >&2
 fi
+# 各伺服器（main、fim、router）的 pid 檔：serve-*.sh 啟動時寫入，scripts/stop-server.sh 只停這個 pid。
+# 不用 pkill：同一台主機可能還有別的專案（business-sim）的 llama-server
+lab_pid_file() { echo "$LOG_DIR/serve-$1.pid"; }
+# 印出 <name> 伺服器還在跑的 pid：pid 檔裡的程序仍是本專案 $LLAMA_BIN 的 llama-server 才算（pid 可能被重用）
+lab_server_pid() {
+  local p; p="$(cat "$(lab_pid_file "$1")" 2>/dev/null)" || return 1
+  [[ "$p" =~ ^[0-9]+$ && "$(readlink -f "/proc/$p/exe" 2>/dev/null)" == "$(readlink -f "$LLAMA_BIN/llama-server")" ]] || return 1
+  echo "$p"
+}
+# serve-*.sh 在 exec llama-server 之前呼叫：已在跑就擋下，否則記下自己的 pid（exec 後 llama-server 沿用同一個 pid）
+lab_server_start() {
+  local p
+  if p="$(lab_server_pid "$1")"; then echo "$1 伺服器已在執行（pid $p），要重開先跑 scripts/stop-server.sh $1" >&2; exit 1; fi
+  mkdir -p "$LOG_DIR"
+  echo $$ > "$(lab_pid_file "$1")"
+}
 export MAIN_PORT="${MAIN_PORT:-8080}"
 export FIM_PORT="${FIM_PORT:-8012}"   # llama.vscode 預設連 8012
 # 主模型的 API 位址，給腳本檢查連線用。harness 實際連的位址寫在各自設定的 provider 裡

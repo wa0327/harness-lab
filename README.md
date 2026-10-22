@@ -91,7 +91,7 @@ scripts/agent-test.sh fix-inventory qwen
 scripts/compare-runs.py --latest fix-inventory
 ```
 
-serve 腳本只輸出到終端機，不會自己寫 log。要留紀錄或放背景跑時自己重導向，例如 `scripts/serve-main.sh > logs/server-main.log 2>&1 &`，停止時 `pkill -f llama-server`。
+serve 腳本只輸出到終端機，不會自己寫 log。要留紀錄或放背景跑時自己重導向，例如 `scripts/serve-main.sh > logs/server-main.log 2>&1 &`，停止時 `scripts/stop-server.sh main`（`fim`、`router` 同理）。每個 serve 腳本把 pid 記在 `logs/serve-<名稱>.pid`，停止只停那個程序；不要用 `pkill -f llama-server`，同一台主機可能還有別的專案的 llama-server。同一個伺服器已在跑時，serve 腳本會擋下，要重開先停止。
 
 ### 6. 每台機器要重建的狀態
 
