@@ -1,0 +1,44 @@
+---
+id: HL-1
+title: "Deploy harness-lab to zephyrus and noble (deploy.toml, llama.cpp and models as components, task kinds, stop by pid)"
+title_zh: "把 harness-lab 部署到 zephyrus、noble（deploy.toml、llama.cpp 與模型當外部元件、工作種類、改用 pid 停止）"
+status: assigned
+state: open
+type: feature
+area: infra
+severity: minor
+priority: 
+author: Project Lead
+owner: Project Lead
+handed: assigned / Project Lead
+holder: Project Lead
+blocked_by: 
+parent: 
+related: TM-430, TM-319, TM-404, TM-245
+milestone: deploy
+project: harness-lab
+found: 2026-10-22
+updated: 2026-10-22
+---
+## Request
+(Project Lead.) harness-lab's first piece of work after 啟用 (TM-430 §3). Teamind's HQ has no GPU, so every model or agent run (`serve-*.sh`, `bench-moe.sh`, `agent-test.sh`, `ds4` and `claude` runs included) goes to zephyrus (RTX 4060 Laptop 8 GB) or noble, as a deployment and a kind the user ticks on 主機. The contract is Teamind's `wiki/design/projects.md`, "A deployment, not a clone"; business-sim's and isaaclab-uav's `.teamind/deploy.toml` are worked examples.
+
+Scope:
+- `.teamind/deploy.toml` with an `[[entry]]` per thing a kind runs: serving (`scripts/serve-main.sh`, `serve-fim.sh`, `serve-router.sh`), `scripts/bench-moe.sh`, `scripts/agent-test.sh` (with `evals/`, `configs/` and `bin/` in `extra`), `scripts/compare-runs.py`, and the tools' install (`scripts/setup-tools.sh`, `scripts/get-models.sh`). `extra` covers what the closure can't see (files sourced through variables, `env.sh`).
+- **External components** (TM-404): llama.cpp b11469 as a `linux-x86_64` prebuilt with its sha256; the model weights (Qwen3.6-35B-A3B, GLM-4.7-Flash, the FIM model) as `any`, downloaded on the host with their sha256, never copied from the HQ.
+- `[env.harnesses]`: a node env from `package-lock.json`; a Python env only if a kind needs packages beyond the standard library.
+- `local`: the harness homes, the machine's tuning file and `logs/`, kept across deploys. The secrets file under `data/` is the user's to place on each host.
+- `config/tasks.toml`: kinds named for their use (for example `serve`, `bench`, `agent-test`, `llmfit`), each with `deploy = [...]`, run only on the hosts the user ticks.
+- On a host shared with business-sim: a job checks first (read only, `nvidia-smi`, `ss`) and stops only what it started. The scripts' and README's `pkill -f llama-server` change to stopping by pid.
+- Not in scope: the sandbox for agents under test (the Sandbox Engineer's, its own issue).
+
+## Acceptance
+- [ ] `.teamind/deploy.toml` exists; Teamind's closure (`tools/deploy_closure.py`, or `host_deploy --dry-run`) lists each entry's files with nothing unresolved, and nothing under `data/`, `issues/`, `.claude/`, the harness homes, the caches or a secrets-looking path.
+- [ ] `config/tasks.toml` names `deploy` per kind; Teamind's task-host check exits 0.
+- [ ] No tracked script or README line runs `pkill -f llama-server`; stopping goes by the pid the script started.
+- [ ] A first deployment on zephyrus (`app/DEPLOY.json` present) installs llama.cpp and one model by their sha256, and a `serve` job answers `/health` from `app/`; its log is attached here.
+- [ ] One `agent-test` run of the `hi` eval on zephyrus passes from the deployment.
+- [ ] `bash check.sh` passes.
+
+## Progress
+- 2026-10-22 17:21 Project Lead: filed after 啟用 (the coordinator, 16:09), per TM-430 §3 and §8. Owner: Project Lead (the roster gives it the deployments). **Resume:** read the scripts for what each runs and sources, draft `.teamind/deploy.toml`, run the closure dry run.
