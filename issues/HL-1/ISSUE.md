@@ -2,7 +2,7 @@
 id: HL-1
 title: "Deploy harness-lab to zephyrus and noble (deploy.toml, llama.cpp and models as components, task kinds, stop by pid)"
 title_zh: "把 harness-lab 部署到 zephyrus、noble（deploy.toml、llama.cpp 與模型當外部元件、工作種類、改用 pid 停止）"
-status: fixing
+status: deferred
 state: open
 type: feature
 area: infra
@@ -10,8 +10,8 @@ severity: minor
 priority: 
 author: Project Lead
 owner: Project Lead
-handed: fixing / Project Lead
-holder: User
+handed: deferred / Project Lead
+holder: Project Lead
 blocked_by: 
 parent: 
 related: TM-430, TM-319, TM-404, TM-245
@@ -68,6 +68,7 @@ Scope:
 - 2026-10-22 19:17 Project Lead: Teamind's lead says business-sim's Qwen on zephyrus is in the host's sha256 store (707a55a8…4450, the hash we declare), which releases zephyrus. `host_deploy --dry-run` on zephyrus (serve entries) agrees: the Qwen file is 「已在主機上，不用下載」; GLM (17.5 GB), FIM (1.6 GB) and llama.cpp (592.8 MB) download; nothing is deleted. No host is ticked yet. Asked the user to tick both noble and zephyrus for `serve` and deploy. **Resume:** the user's ticks and 部署 → a `serve` job per host (`/health` from `app/`; CUDA0 in noble's log); agent-test after TM-450's npm change; ask the user before removing noble's old clone.
 - 2026-10-22 20:03 Project Lead: Teamind's lead says TM-450 is landed (46e893ac): `npm ci` runs with HOME and XDG inside `env/<name>/.install-home`, `ignore_scripts` and `post` are supported, and declared secrets live in `<deploy root>/data/secrets` (dry run shows 已放 or 缺少). It reaches the admin at the batched roll around 20:50, and no 部署 should be pressed before Teamind's lead confirms it's served. No host is ticked yet. Asked the user to hold. **Resume:** Teamind's confirmation → declare `secrets = ["env.sh"]` in deploy.toml, drop `secrets.local.sh` (env.sh line, `.gitignore`, `local`) and ask Teamind to drop it from `logins` → dry runs on both hosts → ask the user to tick noble and zephyrus for `serve` and `agent-test` and deploy.
 - 2026-10-22 20:51 Project Lead: TM-450 is served (Teamind's admin on 78fa9799 since about 20:50). `deploy.toml` now declares `secrets = ["env.sh"]`, and the interim root-level secrets file is gone from env.sh, `.gitignore` and `local` (74f78a7). Asked Teamind's lead to drop it from the registry's `logins`. Dry runs of all eight entries (none ticked yet, so by `--entries`), on both hosts: 43 files, the node env to build, nothing deleted, `secret env.sh` 缺少 (amber only; neither secret is needed yet). zephyrus downloads llama.cpp, GLM and FIM (Qwen is in the store); noble downloads all four. The only unresolved item is `env.sh`'s optional tuning file, which is host-placed. Asked the user to tick both hosts for `serve`, `agent-test` and `setup` and deploy. Caveat from Teamind (TM-465): an admin restart mid-install can wrongly report 「deployed … (watched again after a restart)」; if that shows, check the host read-only and tell Teamind's lead (fixed and served at 21:00, 27beff96: a missing run is now reported as missing). Teamind keeps the old interim secrets name in `logins` for now, to revisit with `env.local.sh`. **Resume:** the user's ticks and 部署 → a `setup` job (place-configs) per host → a `serve` job per host (`/health` from `app/`, CUDA0 in noble's log) → the `hi` eval by `agent-test` → logs attached here; ask the user before removing noble's old clone.
+- 2026-10-22 21:56 Project Lead: the user (21:56) says to leave it here for now, so HL-1 is `deferred`: parked by the user, with everything ready (deploy.toml, tasks.toml, dry runs clean on both hosts, no host ticked, nothing downloaded). Replied in Comments. **Resume:** when the user ticks noble or zephyrus on 主機 and presses 部署, set `fixing` and go on from the 20:51 line: `setup`, `serve` (`/health`, CUDA0 on noble), the `hi` eval, logs here.
 
 ## Comments
 - **2026-10-22 17:36 專案經理:** **關注重點**：harness-lab 的部署設定好了，要你在 Teamind 的「主機」頁做兩件事：
@@ -99,3 +100,5 @@ Scope:
   1. 把 **noble 和 zephyrus** 都勾給「本地模型伺服器」、「Harness 解題測試」、「放好 harness 設定」三項；
   2. 對兩台各按一次 **部署**。zephyrus 要下載約 19.7 GB（Qwen 已在共用庫，不用下載），noble 約 42 GB。
   乾跑會顯示「缺少祕密檔 env.sh」：不影響部署，目前用不到（模型都是公開下載、伺服器只聽本機）。之後要放 HF_TOKEN 或自己的 API_KEY 時，放在各主機的 `~/deploy/harness-lab/data/secrets/env.sh`。
+- **2026-10-22 21:56 User:** 先這樣
+- **2026-10-22 21:56 專案經理:** 好，部署先停在這裡，議題標成暫停。設定都已就緒，哪天要做，直接在「主機」頁勾選並按部署就好，我看到勾選就接著做後面的驗證。
