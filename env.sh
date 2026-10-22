@@ -6,6 +6,12 @@ LAB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 export LAB_DIR
 export LOG_DIR="${LOG_DIR:-$LAB_DIR/logs}"   # 自動產生的紀錄，不進版控
 
+# 祕密（HF_TOKEN、對外開放時自己的 API_KEY）放 data/secrets/env.sh（不進版控，目錄 700、檔案 600），
+# 由使用者放值，團隊成員不讀。最先讀入，所以蓋過下面 env.local.sh 與預設值；命令列上的環境變數仍然優先
+if [[ -f "$LAB_DIR/data/secrets/env.sh" ]]; then
+  source "$LAB_DIR/data/secrets/env.sh"
+fi
+
 # 這台機器自己的設定（不進版控，範本見 env.local.sh.example）。
 # 在下面的預設值之前讀入，所以會蓋過預設值；命令列上的環境變數仍然優先
 if [[ -f "$LAB_DIR/env.local.sh" ]]; then

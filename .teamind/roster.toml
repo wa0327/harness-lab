@@ -1,0 +1,67 @@
+# harness-lab 的成員（Teamind TM-430）：使用者在 TM-430 staffing.toml 確認的七位（2026-10-22 15:31）。
+# 英文角色名 Project Lead 是窗口的類別標記。異動從「專案」頁經收件匣來，由專案經理簽入。
+
+schema = 1
+
+[[role]]
+role = "Project Lead"
+title_zh = "專案經理"
+group = "Lead"
+model = "Opus 5.5"
+effort = "high"
+session = "harness-lab-leader"
+scope = "Teamind 的窗口：收件匣、使用者的留言、分派、簽入與推送；把專案部署到 zephyrus、noble（GPU 的跑分與測試只在主機跑，總部不跑）"
+
+[[role]]
+role = "Harness Designer"
+title_zh = "Harness 設計師"
+group = "Harness group"
+model = "Opus 5.5"
+effort = "high"
+session = "harness-lab-harness-designer"
+scope = "針對特定用途與場景設計最合適的 harness：系統提示詞、工具箱（有哪些工具、怎麼描述、參數）、對話流程；目標是單一場景用起來順、效率最好；寫設計規格，不寫程式"
+
+[[role]]
+role = "Harness Engineer"
+title_zh = "Harness 工程師"
+group = "Harness group"
+model = "Opus 5.5"
+effort = "high"
+session = "harness-lab-harness-engineer"
+scope = "把設計師的規格寫成程式：harness 本體、工具箱實作、OpenAI Chat Completions v1 的串接（llama-server 與其他相容伺服器），附單元測試"
+
+[[role]]
+role = "Open Model Expert"
+title_zh = "開源模型專家"
+group = "Model group"
+model = "Opus 5.5"
+effort = "medium"
+session = "harness-lab-model-expert"
+scope = "開源模型的顧問：用 llmfit 等工具很快回答哪個模型、哪種量化放得進哪台主機、速度大概多少、該選誰；追新模型與量化版本"
+
+[[role]]
+role = "Test Engineer"
+title_zh = "測試與效能工程師"
+group = "Model group"
+model = "Sonnet 5.5"
+effort = "medium"
+session = "harness-lab-test-engineer"
+scope = "測試 harness 與量整體效率：在主機上跑 agent-test、bench，比較各 harness 與模型的成功率、時間、token，寫比較報告；出新的評測題目"
+
+[[role]]
+role = "Inference Engineer"
+title_zh = "推論引擎工程師"
+group = "Model group"
+model = "Opus 5.5"
+effort = "medium"
+session = "harness-lab-inference-engineer"
+scope = "選配：llama.cpp 的建置與伺服器參數（n-cpu-moe、context、KV 量化、batch、router），讓同一個模型在 8GB 顯卡上跑得最快最穩"
+
+[[role]]
+role = "Sandbox Engineer"
+title_zh = "隔離工程師"
+group = "Harness group"
+model = "Opus 5.5"
+effort = "medium"
+session = "harness-lab-sandbox-engineer"
+scope = "選配：讓受測的 agent 在主機上跑在沙箱裡（容器或 bubblewrap），只碰得到自己的工作目錄，不會寫到外面或動到別的專案"

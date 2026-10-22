@@ -1,0 +1,55 @@
+# harness-lab 的設定檔（Teamind TM-430）：Teamind 服務的專案之一。Teamind 讀這個檔、名冊、issues/、git log
+# 與 check；它不改這些檔（CLAUDE.md〈Teamind〉）。
+
+schema = 1
+
+id = "harness-lab"
+name = "harness-lab"
+goal = "The user's lab for local LLMs driving agent harnesses: llama.cpp serving open models, harnesses tested on evals, and a harness of its own"
+goal_zh = "使用者的本地模型 agent 實驗室：llama.cpp 跑開源模型，各 harness 用題目測試比較，並設計自己的 harness"
+
+issues = "issues"
+wiki = "wiki"
+roster = ".teamind/roster.toml"
+check = "bash check.sh"         # 腳本的 bash -n、Python 的語法檢查（不跑 evals/ 的題目），再跑 Teamind 的資安檢查
+
+front_door = "Project Lead"     # 窗口的角色類別；使用者看到的名稱是名冊的 title_zh「專案經理」
+team_session = "teamind"        # Teamind 的 team.sh 起角色用的 zellij session
+user_prefix = "U-"              # 載入器要求；不使用：議題一律 HL-<n>
+code = "HL"                     # 議題代碼：HL-<n>（使用者 2026-10-22 14:56，TM-430）
+
+[pool]
+use = false                     # 總部沒有 GPU，模型與 agent 測試只在主機跑；啟用後第一個議題做 zephyrus、noble 的部署（TM-430 §3）
+
+[verify]
+default = "Project Lead"        # 修好的議題由專案經理驗收，或交回回報者
+
+[[milestone]]
+key = "harness"
+short = "Harness"
+name = "Harness 的設計與實作（系統提示詞、工具箱、流程）"
+label = "Harness"
+
+[[milestone]]
+key = "models"
+short = "模型"
+name = "開源模型、量化與 llama.cpp 的建置與參數"
+label = "模型與推論"
+
+[[milestone]]
+key = "evals"
+short = "測試"
+name = "評測題目、agent 測試、跑分與比較報告"
+label = "測試與效能"
+
+[[milestone]]
+key = "deploy"
+short = "部署"
+name = "部署到 zephyrus、noble 與沙箱"
+label = "部署與隔離"
+
+[[milestone]]
+key = "team"
+short = "團隊"
+name = "團隊運作"
+label = "團隊運作"

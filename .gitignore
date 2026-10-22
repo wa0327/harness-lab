@@ -12,5 +12,13 @@ logs/
 # Python 快取
 __pycache__/
 
+# 執行期資料與祕密（Teamind 的資安規則，TM-430）：data/secrets/、收件匣等都在 data/ 下
+data/
+# Teamind 的位置（TM-392）：每台機器各自的連結，由 Teamind 建，不進 git
+/.teamind/root
+# 議題的附件只留本機，使用者自己上傳的（user-*）除外
+/issues/*/attachments/*
+!/issues/*/attachments/user-*
+
 # 每台機器自己的設定（範本是 env.local.sh.example）
 env.local.sh

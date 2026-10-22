@@ -42,8 +42,9 @@ cp env.local.sh.example env.local.sh   # 這台機器自己的設定，不進版
 ### 2. 編輯 `env.local.sh`（在安裝之前）
 
 - **驅動不支援 CUDA 13**：設 `LLAMA_CUDA=12.8`。要在下一步裝 llama.cpp 之前設；已經裝了 13.4 版的話，設好後重跑 `scripts/install-llama.sh` 會改裝 12.8 版。
-- **要讓區網內其它電腦使用時**：同時設 `HOST=0.0.0.0` 和自己的 `API_KEY`，見下方「對外開放與 API key」。預設只聽本機，key 是公開的預設值 `harness-lab`。
-- **下載模型想放寬 Hugging Face 的速率限制**：加一行 `export HF_TOKEN=...`，或之後執行 `source env.sh && hf auth login`（`HF_HOME` 指向專案內，token 也存在 `.cache/huggingface/`）。
+- **要讓區網內其它電腦使用時**：在這裡設 `HOST=0.0.0.0`，自己的 `API_KEY` 放 `data/secrets/env.sh`，見下方「對外開放與 API key」。預設只聽本機，key 是公開的預設值 `harness-lab`。
+- **祕密不放 `env.local.sh`**：`HF_TOKEN` 和自己的 `API_KEY` 放 `data/secrets/env.sh`（不進版控，`chmod 700 data/secrets`、`chmod 600 data/secrets/env.sh`），`env.sh` 最先讀它。`env.local.sh` 只放調參數，Teamind 的成員可以讀寫。
+- **下載模型想放寬 Hugging Face 的速率限制**：在 `data/secrets/env.sh` 加一行 `: "${HF_TOKEN:=...}"`，或之後執行 `source env.sh && hf auth login`（`HF_HOME` 指向專案內，token 也存在 `.cache/huggingface/`）。
 - 一律用 `: "${變數:=值}"` 的寫法，命令列上的環境變數才能繼續優先。其它可調的變數（`CTX_<模型>`、`BATCH`、`UBATCH`、`KV_TYPE`、`LOAD_MODE`、`THREADS`、`MAIN_PORT`…）的預設值和說明在 `env.sh`。
 - **改 `MAIN_PORT` 時**：4 份 harness 設定裡的位址寫死 `http://127.0.0.1:8080/v1`，`configs/` 和 `.home/` 都要一起改，否則 harness 連不上。
 
@@ -141,11 +142,11 @@ scripts/serve-fim.sh        # （選用）Tab 補全，http://127.0.0.1:8012
 
 預設只聽本機（`HOST=127.0.0.1`），`API_KEY` 是 `env.sh` 給的公開預設值 `harness-lab`。它**不是祕密**，只是讓伺服器和各 harness 一律有 key：Pi、Codex、Qwen Code 讀到空字串都會當成缺少憑證（Codex 的 `env_key`、Qwen Code 的 `envKey` 直接報錯；Pi 的自訂 provider 不會把模型標為可用），有了預設值，設定就不用分「有 key／沒 key」兩種。
 
-要讓區網內其它電腦使用時，在 `env.local.sh` **同時**設兩項：
+要讓區網內其它電腦使用時，**同時**設兩項：
 
 ```bash
-: "${HOST:=0.0.0.0}"
-: "${API_KEY:=你的key}"     # 例如用 openssl rand -hex 16 產生
+: "${HOST:=0.0.0.0}"        # 寫在 env.local.sh
+: "${API_KEY:=你的key}"     # 寫在 data/secrets/env.sh（不進版控）；例如用 openssl rand -hex 16 產生
 ```
 
 各 harness 的設定**不用改**，都直接讀 `API_KEY`：
