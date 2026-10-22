@@ -11,7 +11,7 @@ priority:
 author: Project Lead
 owner: Project Lead
 handed: fixing / Project Lead
-holder: User
+holder: Project Lead
 blocked_by: 
 parent: 
 related: TM-430, TM-319, TM-404, TM-245
@@ -59,6 +59,7 @@ Scope:
 - 2026-10-22 17:35 Project Lead: `.teamind/deploy.toml` is in, with eight entries (serve-main, serve-fim, serve-router, stop-server, bench, agent-test, compare-runs, place-configs), `[env.node]` Node 24, `local` (the harness homes, the caches, `logs/` so the pid files survive a swap, the tuning file, the interim secrets file) and HL-2's four components (llama.cpp b11469 CUDA 13.4, one per model at `models/<file stem>/`), each component carried only by the entries that use it. `config/tasks.toml` has five kinds (serve, bench, agent-test, compare-runs, setup) with `hosts = []` for the user to tick on 主機; the GPU kinds are `exclusive` with `min_free_gpu_mb = 6000`. `config/platform.toml` is new, and the manifest's `[pool]` is on. Checks: Teamind's `check_project.py` and `check_task_hosts.py` pass. The closure (with `--entries`, before the commit) lists the eight entries' 41 files; its unresolved items are the three host-placed files `env.sh` sources when present (TM-450's `secrets` key will name the data one), the `$LAB_DIR` launches already in agent-test's `extra`, and `[env.node]`, which `--entries` reads from main. The dry run lists these and doesn't stop on them (host_deploy.py:817). **Resume:** re-run the closure from main after this commit; then the user ticks zephyrus for `serve` and `agent-test`, and the first deployment proves llama.cpp, a model, `/health` and the `hi` eval (and on noble, CUDA0 at first start, per HL-2).
 - 2026-10-22 17:36 Project Lead: the closure from main resolves all eight entries (43 files); the only unresolved items are the expected ones (host-placed files `env.sh` sources when present, and `$LAB_DIR` launches already in `extra`). HL-2 accepted and closed. Asked the user (below) to tick zephyrus for `serve` and `agent-test` on 主機 and press 部署. **Resume:** the user's tick and 部署; then a `serve` job on zephyrus (`/health` from `app/`), the `hi` eval by `agent-test`, logs attached here; then noble.
 - 2026-10-22 17:44 Project Lead: Teamind's lead says TM-450's interim is in (468e5d57): `secrets.local.sh` is in our `logins` with its security.md row, and the guard closes our logins inside every deployment folder too. TM-450's full Proposal (host `data/secrets/`, `npm ci` with HOME and XDG inside the env folder) is still queued with Teamind's Systems Engineer. Until it's served, a deployment that builds the node env (the `agent-test` kind) would let opencode-ai's postinstall write folders into zephyrus's home. So the ask is now two steps: tick zephyrus for `serve` only and deploy (no node env), and tick `agent-test` once Teamind says the npm change is in. **Resume:** the user's `serve` tick and 部署 → a `serve` job (`/health` from `app/`); Teamind's word on TM-450's npm change → the user ticks `agent-test` → the `hi` eval; then noble.
+- 2026-10-22 18:12 Project Lead: the user (18:11) doesn't know what earlier sessions did on the hosts, and authorizes reading harness-lab's Claude transcripts (`~/.claude/projects`, 37 transcripts from 10-08 to 10-11 plus today's) to find out. A read-only subagent of this session is auditing them: which machine each session ran on, what was installed or left on resolute/zephyrus and noble (clone, models, llama.cpp, harness homes, running servers), writes outside the repo, and incidents. Secret values are never copied. **Resume:** its report → a reply to the user here, and any change to the deployment plan (for example reusing the models already on zephyrus); the user's 部署 waits on that reply.
 
 ## Comments
 - **2026-10-22 17:36 專案經理:** **關注重點**：harness-lab 的部署設定好了，要你在 Teamind 的「主機」頁做兩件事：
@@ -66,3 +67,4 @@ Scope:
   2. 對 zephyrus 按 **部署**。第一次會在 zephyrus 上下載 llama.cpp（約 560 MB）和三個模型（共約 41 GB），每個都核對 sha256，總部不經手。
   祕密檔目前不需要：模型都是公開下載，伺服器也只聽本機。之後要開放給區網時，再把自己的 API_KEY 放到主機上（位置到時候告訴你）。
 - **2026-10-22 17:44 專案經理:** **關注重點**：更正上一則，分兩步勾。現在只把 zephyrus 勾給「本地模型伺服器」，然後按部署；「Harness 解題測試」先別勾。原因是 Teamind 讓 npm 安裝只寫在自己資料夾內的修改還沒上線（TM-450），這時建 harness 的 node 環境，opencode 的安裝腳本會在 zephyrus 的家目錄留下資料夾。只跑伺服器不需要 node 環境，所以沒有這個問題。等 Teamind 改好，我再通知你勾「Harness 解題測試」。
+- **2026-10-22 18:11 User:** 我不曉得之前的 session 會在主機上做哪些事，我授權你可以查該專案的 ~/.claude/projects 的對話記錄來看。
