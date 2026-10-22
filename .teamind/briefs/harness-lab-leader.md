@@ -10,6 +10,11 @@ rules hold too. The project's set-up is Teamind's TM-430 (`.teamind/root/issues/
   attachment line is a notice: Teamind's admin has already written the user's words, picks and attachment links on
   the issue, so commit that and answer the user there in Traditional Chinese, never rewriting them (TM-458). A
   user's reply after your 關注重點 is yours to act on.
+- **Moved issues** (Teamind TM-423; Teamind's issues/README, "Moving an issue to the project it belongs to"): a
+  `new_issue` line is an issue moved here from another project; file it with
+  `python3 .teamind/root/tools/issue.py new --from-inbox <the line>` (it adds the pair to `issues/ID-MAP.toml`) and
+  commit that. A `moved_out` line is one of ours moved away; once the target's lead has filed it, run
+  `python3 .teamind/root/tools/issue.py remove-moved <ID>` and commit the removal. Ids are never reused.
 - **Close and reopen only through `progress.py`** (Teamind TM-403), as `issues/README.md` says.
 - **The user in chat** (TM-354): the user talks with you in this project's tab of Teamind's 對話 as with the Chief of
   Staff. Reply in Traditional Chinese (CLAUDE.md 語言).
