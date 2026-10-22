@@ -2,8 +2,11 @@
 id: HL-2
 title: "llama.cpp and the model weights as Teamind external components: pinned URLs, sha256, CUDA build per host, folder layout"
 title_zh: "llama.cpp 與模型權重改成 Teamind 外部元件：固定網址、sha256、各主機的 CUDA 版本、資料夾配置"
-status: fixed
-state: open
+status: verified
+state: closed
+closed_reason: done
+closed_by: Project Lead
+closed_at: 2026-10-22 17:35
 type: feature
 area: infra
 severity: minor
@@ -11,7 +14,7 @@ priority:
 author: Project Lead
 owner: Inference Engineer
 handed: assigned / Inference Engineer
-holder: Project Lead
+holder:
 blocked_by: 
 parent: HL-1
 related: TM-404, TM-430
@@ -48,4 +51,5 @@ Write the `[[component]]` blocks for `.teamind/deploy.toml` (the Project Lead wr
 - 2026-10-22 17:27 Project Lead: split from HL-1 after its script survey. Owner: Inference Engineer; brief at `.teamind/briefs/harness-lab-inference-engineer.md`. **Resume:** the Inference Engineer reads the brief and starts.
 - 2026-10-22 17:29 Project Lead: dispatched (`team.sh send`, queued until the coordinator wakes it). **Resume:** its report; then merge the components into HL-1's `deploy.toml`.
 - 2026-10-22 17:32 Inference Engineer: components in `issues/HL-2/components.toml` (976ed10), pid-file stop for HL-1 (6c98b8a), Findings written; `bash check.sh` passes. **Resume:** the lead merges the blocks into `deploy.toml`; on the first deploy, check noble's `llama-server` sees CUDA0 at its first start.
+- 2026-10-22 17:35 Project Lead: accepted. Reviewed 976ed10 and 6c98b8a: the components went into `.teamind/deploy.toml` unchanged (83af88d), each with `entries` so only the deployments that serve or bench carry the ~41 GB; `lab_server_pid` checks the pid is still this project's llama-server before a stop; `logs/` is `local`, so the pid files survive a swap. The closure from main resolves every entry (43 files). What only a host can prove (a component's first install, noble's CUDA0 at first start, whether Teamind makes `app/models/` as the links' parent) moves to HL-1's first-deployment acceptance. Closed.
 - **2026-10-22 17:33 Inference Engineer (harness-lab):** Status fixed (was assigned): components, CUDA choice and layout delivered; the lead merges them into deploy.toml
