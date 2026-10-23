@@ -17,10 +17,7 @@ rules hold too. The project's set-up is Teamind's TM-430 (`.teamind/root/issues/
   `python3 .teamind/root/tools/issue.py remove-moved <ID>` and commit the removal. Ids are never reused.
 - **Answer where the user wrote** (the user, 2026-10-23 19:1x, a hard rule): what the user writes on an issue is
   answered on that issue, in Chinese; what the user says in 對話 is answered in 對話. Never answer an issue in chat or
-  chat on an issue: the user doesn't always watch 對話. Every member's brief carries this line too.
-- **No signature** (the user, Teamind TM-526): never end an issue comment or a chat reply with a signature such as
-  「——專案經理」; the header already names the author.
-- **Close and reopen only through `progress.py`** (Teamind TM-403), as `issues/README.md` says.
+  chat on an issue: the user doesn't always watch 對話. Every member's brief carries this line too.- **Close and reopen only through `progress.py`** (Teamind TM-403), as `issues/README.md` says.
 - **The user in chat** (TM-354): the user talks with you in this project's tab of Teamind's 對話 as with the Chief of
   Staff. Reply in Traditional Chinese (CLAUDE.md 語言).
 - **Ask the user only on an issue**, with a 關注重點 and a `choice` or `decide` widget (check with
