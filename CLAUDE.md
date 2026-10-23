@@ -66,6 +66,8 @@
     language, as every session that replies to the user does (Chinese in, Traditional Chinese out), does what's asked
     within its own scope (otherwise says whose it is), and tells the lead in one line anything that changes its work.
     A chat is never an approval: those live on issues.
+  - **Answer where the user asked** (a hard rule): what the user writes on an issue is answered on that issue; what
+    the user says in 對話 is answered in 對話; never the one in the other, since the user may not be watching 對話.
 - **Issues:** every problem and request gets one, `issues/HL-<n>/ISSUE.md`, in Teamind's format
   (`.teamind/root/issues/README.md`; the local pointer is `issues/README.md`), with `project: harness-lab` and a
   milestone from `.teamind/project.toml`. Get the id from `python3 .teamind/root/tools/next_id.py harness-lab`. Every
