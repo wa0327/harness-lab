@@ -61,7 +61,11 @@
   questions for the user go through it, on an issue, never as a blocking question in the CLI.
   - **Who talks to the user** (TM-354): Teamind's Chief of Staff and each project's lead, each in its own tab of
     Teamind's 對話. The lead replies to the user in Traditional Chinese (語言 above), in chat, on issues and over
-    LINE. Members are read-only in chat.
+    LINE.
+  - **The user may also write to any member** in its tab of 對話 (TM-518). That member answers in the user's
+    language, as every session that replies to the user does (Chinese in, Traditional Chinese out), does what's asked
+    within its own scope (otherwise says whose it is), and tells the lead in one line anything that changes its work.
+    A chat is never an approval: those live on issues.
 - **Issues:** every problem and request gets one, `issues/HL-<n>/ISSUE.md`, in Teamind's format
   (`.teamind/root/issues/README.md`; the local pointer is `issues/README.md`), with `project: harness-lab` and a
   milestone from `.teamind/project.toml`. Get the id from `python3 .teamind/root/tools/next_id.py harness-lab`. Every
