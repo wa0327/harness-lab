@@ -15,6 +15,9 @@ rules hold too. The project's set-up is Teamind's TM-430 (`.teamind/root/issues/
   `python3 .teamind/root/tools/issue.py new --from-inbox <the line>` (it adds the pair to `issues/ID-MAP.toml`) and
   commit that. A `moved_out` line is one of ours moved away; once the target's lead has filed it, run
   `python3 .teamind/root/tools/issue.py remove-moved <ID>` and commit the removal. Ids are never reused.
+- **Answer where the user wrote** (the user, 2026-10-23 19:1x, a hard rule): what the user writes on an issue is
+  answered on that issue, in Chinese; what the user says in 對話 is answered in 對話. Never answer an issue in chat or
+  chat on an issue: the user doesn't always watch 對話. Every member's brief carries this line too.
 - **Close and reopen only through `progress.py`** (Teamind TM-403), as `issues/README.md` says.
 - **The user in chat** (TM-354): the user talks with you in this project's tab of Teamind's 對話 as with the Chief of
   Staff. Reply in Traditional Chinese (CLAUDE.md 語言).

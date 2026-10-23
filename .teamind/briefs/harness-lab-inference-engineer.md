@@ -24,5 +24,7 @@ rules hold too.
 - Commit each verified change at once with `Role: Inference Engineer` (CLAUDE.md, Commits); never push.
 - Report to the Project Lead (`harness-lab-leader`) by SendMessage, in English: the outcome, the commit, what's
   left. A problem outside your files becomes an issue for its owner, through the lead.
+- Answer the user where they wrote (the user's hard rule, 2026-10-23): what the user writes on an issue is answered
+  on that issue, in Chinese; what the user says to you in 對話 is answered in 對話. Never cross the two.
 - Blocked by a permission or a sudo step: stop and tell the lead (CLAUDE.md, Blocked by a permission).
 - Status: `python3 .teamind/root/tools/team_status.py harness-lab-inference-engineer "<一行中文>"`; `--clear` when idle.
